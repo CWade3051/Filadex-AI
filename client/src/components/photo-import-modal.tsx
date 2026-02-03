@@ -97,6 +97,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     expiresAt: string;
   } | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [pendingPhotoCount, setPendingPhotoCount] = useState(0); // Photos uploaded but not yet processed
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const lastImageCountRef = useRef(0); // Track image count to detect new uploads
   const processedImageUrlsRef = useRef<Set<string>>(new Set()); // Track which images we've already processed
@@ -179,23 +180,36 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     { value: "3", label: "3kg" },
   ];
 
-  // Clean up on close
+  // Clean up on close - but preserve mobile session if active
   useEffect(() => {
     if (!isOpen) {
       setSelectedFiles([]);
-      setProcessedImages([]);
+      // Only reset if NO active mobile session with results
+      // This preserves state when user closes and reopens during mobile upload
+      if (!mobileSession || processedImages.length === 0) {
+        setProcessedImages([]);
+        setMobileSession(null);
+        setIsPolling(false);
+        setPendingPhotoCount(0);
+        lastImageCountRef.current = 0;
+        processedImageUrlsRef.current = new Set();
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+      }
       setIsProcessing(false);
       setActiveTab("upload");
-      setMobileSession(null);
-      setIsPolling(false);
-      lastImageCountRef.current = 0;
-      processedImageUrlsRef.current = new Set();
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
     }
-  }, [isOpen]);
+  }, [isOpen, mobileSession, processedImages.length]);
+  
+  // Resume polling when modal reopens with active session
+  useEffect(() => {
+    if (isOpen && mobileSession && !isPolling && !pollingRef.current) {
+      // Resume polling for this session
+      startPolling(mobileSession.token);
+    }
+  }, [isOpen, mobileSession, isPolling]);
 
   // File drop handler
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -335,7 +349,8 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 processedImageUrlsRef.current.add(img.imageUrl);
               });
               
-              // Show notification
+              // Update pending count and show notification
+              setPendingPhotoCount(prev => prev + newImages.length);
               toast({
                 title: t("ai.newPhotosReceived") || "New Photos Received",
                 description: `${newImageCount} new photo(s) - processing with AI...`,
@@ -387,6 +402,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         return [...prev, ...trulyNew];
       });
       
+      setPendingPhotoCount(0); // Clear pending count after processing
       setActiveTab("review");
       setIsProcessing(false);
     },
@@ -807,7 +823,17 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                     {t("ai.qrCodeExpires", { minutes: "30" })}
                   </p>
                   
-                  {processedImages.length === 0 ? (
+                  {isProcessing ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-2 text-orange-500">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t("ai.processingPhotos") || `Processing ${pendingPhotoCount} photo(s) with AI...`}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {t("ai.canUploadMoreWhileProcessing") || "You can upload more photos while processing"}
+                      </p>
+                    </div>
+                  ) : processedImages.length === 0 && pendingPhotoCount === 0 ? (
                     <div className="flex items-center justify-center gap-2 text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       {t("ai.waitingForPhotos")}
@@ -815,24 +841,16 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                   ) : (
                     <div className="space-y-2">
                       <p className="text-green-600 font-medium">
-                        {t("ai.photosReceived", { count: processedImages.length })}
+                        {t("ai.photosProcessed", { count: processedImages.length }) || `${processedImages.length} photo(s) ready for review`}
                       </p>
                       <Button
-                        onClick={() => {
-                          setIsProcessing(true);
-                          processMobileSessionMutation.mutate(mobileSession.token);
-                        }}
-                        disabled={isProcessing}
+                        onClick={() => setActiveTab("review")}
                       >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            {t("ai.processing")}
-                          </>
-                        ) : (
-                          t("ai.processPhotos")
-                        )}
+                        {t("ai.viewResults") || "View Results"}
                       </Button>
+                      <p className="text-sm text-muted-foreground">
+                        {t("ai.canUploadMore") || "Upload more photos from your phone if needed"}
+                      </p>
                     </div>
                   )}
                   
