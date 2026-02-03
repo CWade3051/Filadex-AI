@@ -125,3 +125,6 @@ secrets/
 *.bak
 *.backup
 *.old
+
+# Backup files
+backups/
