@@ -273,6 +273,62 @@ export function registerFilamentRoutes(app: Express): void {
       appLogger.debug("Creating filament", { userId: req.userId });
 
       const data = req.body;
+      
+      // Default purchase date to today if not provided
+      const purchaseDate = data.purchaseDate || new Date().toISOString().split('T')[0];
+      
+      // Auto-create manufacturer if it doesn't exist
+      if (data.manufacturer && data.manufacturer.trim()) {
+        const existingManufacturers = await storage.getManufacturers();
+        const manufacturerExists = existingManufacturers.some(
+          m => m.name.toLowerCase() === data.manufacturer.toLowerCase()
+        );
+        if (!manufacturerExists) {
+          appLogger.debug(`Auto-creating manufacturer: ${data.manufacturer}`);
+          await storage.createManufacturer({ name: data.manufacturer.trim() });
+        }
+      }
+      
+      // Auto-create material if it doesn't exist
+      if (data.material && data.material.trim()) {
+        const existingMaterials = await storage.getMaterials();
+        const materialExists = existingMaterials.some(
+          m => m.name.toLowerCase() === data.material.toLowerCase()
+        );
+        if (!materialExists) {
+          appLogger.debug(`Auto-creating material: ${data.material}`);
+          await storage.createMaterial({ name: data.material.trim() });
+        }
+      }
+      
+      // Auto-create diameter if it doesn't exist
+      if (data.diameter) {
+        const diameterStr = data.diameter.toString();
+        const existingDiameters = await storage.getDiameters();
+        const diameterExists = existingDiameters.some(
+          d => d.value === diameterStr
+        );
+        if (!diameterExists) {
+          appLogger.debug(`Auto-creating diameter: ${diameterStr}`);
+          await storage.createDiameter({ value: diameterStr });
+        }
+      }
+      
+      // Auto-create color if it doesn't exist
+      if (data.colorName && data.colorName.trim()) {
+        const existingColors = await storage.getColors();
+        const colorExists = existingColors.some(
+          c => c.name.toLowerCase() === data.colorName.toLowerCase()
+        );
+        if (!colorExists) {
+          appLogger.debug(`Auto-creating color: ${data.colorName}`);
+          await storage.createColor({ 
+            name: data.colorName.trim(),
+            code: data.colorCode || '#808080'
+          });
+        }
+      }
+      
       const insertData: InsertFilament = {
         userId: req.userId,
         name: data.name,
@@ -281,16 +337,20 @@ export function registerFilamentRoutes(app: Express): void {
         colorName: data.colorName,
         colorCode: data.colorCode,
         printTemp: data.printTemp,
+        printSpeed: data.printSpeed,
         diameter: data.diameter ? data.diameter.toString() : undefined,
         totalWeight: data.totalWeight.toString(),
         remainingPercentage: data.remainingPercentage.toString(),
-        purchaseDate: data.purchaseDate,
+        purchaseDate: purchaseDate,
         purchasePrice: data.purchasePrice ? data.purchasePrice.toString() : undefined,
         status: data.status,
         spoolType: data.spoolType,
         dryerCount: data.dryerCount,
         lastDryingDate: data.lastDryingDate,
-        storageLocation: data.storageLocation
+        storageLocation: data.storageLocation,
+        locationDetails: data.locationDetails,
+        notes: data.notes,
+        imageUrl: data.imageUrl,
       };
 
       const newFilament = await storage.createFilament(insertData);
@@ -339,6 +399,7 @@ export function registerFilamentRoutes(app: Express): void {
       if (data.dryerCount !== undefined) updateData.dryerCount = data.dryerCount;
       if (data.lastDryingDate !== undefined) updateData.lastDryingDate = data.lastDryingDate;
       if (data.storageLocation !== undefined) updateData.storageLocation = data.storageLocation;
+      if (data.locationDetails !== undefined) updateData.locationDetails = data.locationDetails;
 
       const updatedFilament = await storage.updateFilament(id, updateData, req.userId);
       if (!updatedFilament) {
@@ -370,7 +431,7 @@ export function registerFilamentRoutes(app: Express): void {
         return res.status(404).json({ message: "Filament not found" });
       }
 
-      res.status(204).end();
+      res.status(200).json({ success: true, message: "Filament deleted" });
     } catch (error) {
       appLogger.error("Error deleting filament:", error);
       res.status(500).json({ message: "Failed to delete filament" });

@@ -100,3 +100,28 @@ playwright-mcp/
 
 # Project-specific
 TODO.md
+
+# Uploaded files (filament images)
+public/uploads/
+uploads/
+
+# Lock files
+init-data.lock
+*.lock
+!package-lock.json
+
+# Local development notes
+codex.md
+
+# Secrets / API keys (extra protection)
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+.secrets
+
+# Backup files
+*.bak
+*.backup
+*.old

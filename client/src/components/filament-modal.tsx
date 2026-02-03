@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Filament, InsertFilament, insertFilamentSchema } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
 import { de, enUS } from "date-fns/locale";
-import { CalendarIcon, Scan, ScanFace, Copy } from "lucide-react";
+import { CalendarIcon, Scan, ScanFace, Copy, ZoomIn, ZoomOut, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -174,6 +174,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -209,6 +210,9 @@ const createFormSchema = (t: (key: string) => string) => z.object({
   dryerCount: z.number().min(0).default(0),
   lastDryingDate: z.date().optional(),
   storageLocation: z.string().optional(),
+  locationDetails: z.string().optional(),
+  notes: z.string().optional(),
+  imageUrl: z.string().optional(),
 });
 
 // This will be defined in the component
@@ -256,6 +260,14 @@ export function FilamentModal({
   const [customWeightVisible, setCustomWeightVisible] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showNFCScanner, setShowNFCScanner] = useState(false);
+  
+  // Image preview state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const imageContainerRef = useRef<HTMLDivElement>(null);
 
   // Create form schema with translations
   const formSchema = createFormSchema(t);
@@ -320,7 +332,10 @@ export function FilamentModal({
       spoolType: (filament?.spoolType as any) || undefined,
       dryerCount: filament?.dryerCount || 0,
       lastDryingDate: filament?.lastDryingDate ? new Date(filament.lastDryingDate) : undefined,
-      storageLocation: filament?.storageLocation || ""
+      storageLocation: filament?.storageLocation || "",
+      locationDetails: (filament as any)?.locationDetails || "",
+      notes: filament?.notes || "",
+      imageUrl: filament?.imageUrl || "",
     },
   });
 
@@ -343,7 +358,10 @@ export function FilamentModal({
         spoolType: (filament.spoolType as any) || undefined,
         dryerCount: filament.dryerCount || 0,
         lastDryingDate: filament.lastDryingDate ? new Date(filament.lastDryingDate) : undefined,
-        storageLocation: filament.storageLocation || ""
+        storageLocation: filament.storageLocation || "",
+        locationDetails: (filament as any).locationDetails || "",
+        notes: filament.notes || "",
+        imageUrl: filament.imageUrl || "",
       });
 
       setRemainingPercentage(Number(filament.remainingPercentage));
@@ -370,7 +388,10 @@ export function FilamentModal({
         spoolType: undefined,
         dryerCount: 0,
         lastDryingDate: undefined,
-        storageLocation: ""
+        storageLocation: "",
+        locationDetails: "",
+        notes: "",
+        imageUrl: "",
       });
       setRemainingPercentage(100);
       setTotalWeight(1);
@@ -643,13 +664,15 @@ export function FilamentModal({
                             />
                           </div>
                           {materials.map((material) => (
-                            <SelectItem key={material.id} value={material.name}>
+                            <SelectItem key={`db-${material.id}`} value={material.name}>
                               {material.name}
                             </SelectItem>
                           ))}
-                          {/* Add predefined material types */}
-                          {materialTypes.map((material) => (
-                            <SelectItem key={material.value} value={material.value}>
+                          {/* Add predefined material types that aren't already in database */}
+                          {materialTypes
+                            .filter(mt => !materials.some(m => m.name.toUpperCase() === mt.value.toUpperCase()))
+                            .map((material) => (
+                            <SelectItem key={`preset-${material.value}`} value={material.value}>
                               {material.label}
                             </SelectItem>
                           ))}
@@ -1052,6 +1075,26 @@ export function FilamentModal({
                         </FormItem>
                       )}
                     />
+
+                    <FormField
+                      control={form.control}
+                      name="locationDetails"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                          <FormLabel>{t('filaments.locationDetails')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={t('filaments.locationDetailsPlaceholder')}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription className="text-xs">
+                            {t('filaments.locationDetailsDescription')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                 </div>
               </div>
@@ -1179,6 +1222,145 @@ export function FilamentModal({
                     )}
                   />
                 </div>
+              </div>
+
+              {/* Notes Section */}
+              <div className="border rounded-md p-4 dark:bg-neutral-900 bg-gray-50 dark:border-neutral-700 border-gray-200">
+                <h4 className="font-medium dark:text-neutral-400 text-gray-700 mb-3">{t('ai.addNotes')}</h4>
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Textarea
+                          placeholder={t('ai.notesPlaceholder')}
+                          className="resize-none"
+                          rows={3}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Image preview if exists */}
+                {filament?.imageUrl && (
+                  <div className="mt-4">
+                    <FormLabel className="mb-2 block">{t('ai.imagePreview')}</FormLabel>
+                    <div 
+                      className="relative w-32 h-32 cursor-pointer group"
+                      onClick={() => {
+                        setPreviewZoom(1);
+                        setPreviewPan({ x: 0, y: 0 });
+                        setPreviewOpen(true);
+                      }}
+                    >
+                      <img
+                        src={filament.imageUrl}
+                        alt={filament.name}
+                        className="w-full h-full object-cover rounded-md border transition-opacity group-hover:opacity-80"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ZoomIn className="w-8 h-8 text-white drop-shadow-lg" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{t('ai.clickToEnlarge') || 'Click to enlarge'}</p>
+                  </div>
+                )}
+
+                {/* Image Preview Dialog */}
+                <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+                  <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+                    <div className="relative w-full h-full">
+                      {/* Controls */}
+                      <div className="absolute top-4 right-4 z-10 flex gap-2">
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          onClick={() => setPreviewZoom(z => Math.min(z + 0.25, 5))}
+                          title="Zoom In"
+                        >
+                          <ZoomIn className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          onClick={() => setPreviewZoom(z => Math.max(z - 0.25, 0.5))}
+                          title="Zoom Out"
+                        >
+                          <ZoomOut className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          onClick={() => {
+                            setPreviewZoom(1);
+                            setPreviewPan({ x: 0, y: 0 });
+                          }}
+                          title="Reset"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          onClick={() => setPreviewOpen(false)}
+                          title="Close"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      {/* Image container */}
+                      <div
+                        ref={imageContainerRef}
+                        className="w-full h-[80vh] overflow-hidden cursor-grab active:cursor-grabbing flex items-center justify-center bg-black/90"
+                        onMouseDown={(e) => {
+                          setIsDragging(true);
+                          setDragStart({ x: e.clientX - previewPan.x, y: e.clientY - previewPan.y });
+                        }}
+                        onMouseMove={(e) => {
+                          if (isDragging) {
+                            setPreviewPan({
+                              x: e.clientX - dragStart.x,
+                              y: e.clientY - dragStart.y
+                            });
+                          }
+                        }}
+                        onMouseUp={() => setIsDragging(false)}
+                        onMouseLeave={() => setIsDragging(false)}
+                        onWheel={(e) => {
+                          e.preventDefault();
+                          const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                          setPreviewZoom(z => Math.min(Math.max(z + delta, 0.5), 5));
+                        }}
+                      >
+                        {filament?.imageUrl && (
+                          <img
+                            src={filament.imageUrl}
+                            alt={filament.name}
+                            className="select-none"
+                            style={{
+                              maxWidth: previewZoom === 1 ? '90%' : 'none',
+                              maxHeight: previewZoom === 1 ? '90%' : 'none',
+                              objectFit: 'contain',
+                              transform: `translate(${previewPan.x}px, ${previewPan.y}px) scale(${previewZoom})`,
+                              transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                            }}
+                            draggable={false}
+                          />
+                        )}
+                      </div>
+                      
+                      {/* Instructions */}
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
+                        {t('ai.scrollToZoom') || 'Scroll to zoom'} • {t('ai.dragToPan') || 'Drag to pan'} • {t('ai.clickResetToCenter') || 'Click Reset to center'}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               </form>

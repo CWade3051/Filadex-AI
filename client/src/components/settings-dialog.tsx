@@ -8,7 +8,8 @@ import {
   ColorsList,
   DiametersList,
   StorageLocationsList,
-  UnitsSettings
+  UnitsSettings,
+  SettingsApiKey
 } from "./settings";
 import {
   Tabs,
@@ -83,6 +84,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
                 <TabsTrigger value="diameters" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.diameters.title')}</TabsTrigger>
                 <TabsTrigger value="storage-locations" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.storageLocations.title')}</TabsTrigger>
                 <TabsTrigger value="units" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.units.title')}</TabsTrigger>
+                <TabsTrigger value="ai" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('apiKey.title')}</TabsTrigger>
                 <TabsTrigger value="filament-import-export" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.filamentImportExport.title')}</TabsTrigger>
               </TabsList>
             </div>
@@ -112,6 +114,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
 
           <TabsContent value="units">
             <UnitsSettings />
+          </TabsContent>
+
+          <TabsContent value="ai">
+            <SettingsApiKey />
           </TabsContent>
 
           <TabsContent value="filament-import-export">

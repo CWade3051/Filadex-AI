@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { Filament } from "@shared/schema";
 import { FilamentSpool } from "@/components/ui/filament-spool";
 import { Card } from "@/components/ui/card";
-import { Copy, CheckCircle2 } from "lucide-react";
+import { Copy, CheckCircle2, ImageIcon, X } from "lucide-react";
 import { useTranslation } from "@/i18n";
 import {
   Tooltip,
@@ -9,6 +10,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog";
 
 interface FilamentCardProps {
   filament: Filament;
@@ -32,6 +37,8 @@ export function FilamentCard({
   onSelect
 }: FilamentCardProps) {
   const { t } = useTranslation();
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  
   // Calculate the remaining weight
   const totalWeight = Number(filament.totalWeight);
   const remainingPercentage = Number(filament.remainingPercentage);
@@ -68,6 +75,22 @@ export function FilamentCard({
                 <div className={`mr-2 flex-shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
                   <CheckCircle2 size={18} className={selected ? 'opacity-100' : 'opacity-30'} />
                 </div>
+              )}
+              {filament.imageUrl && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowImagePreview(true);
+                  }}
+                  className="mr-2 flex-shrink-0 w-8 h-8 rounded overflow-hidden border dark:border-neutral-600 border-gray-300 hover:ring-2 hover:ring-primary transition-all"
+                  title="View image"
+                >
+                  <img
+                    src={filament.imageUrl}
+                    alt={filament.name}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -320,6 +343,35 @@ export function FilamentCard({
         </div>
       </div>
     </Card>
+
+    {/* Image Preview Dialog */}
+    {filament.imageUrl && (
+      <Dialog open={showImagePreview} onOpenChange={setShowImagePreview}>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden">
+          <div className="relative">
+            <img
+              src={filament.imageUrl}
+              alt={filament.name}
+              className="w-full h-auto max-h-[80vh] object-contain"
+            />
+            <button
+              onClick={() => setShowImagePreview(false)}
+              className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-black/70 transition-colors"
+              title="Close preview"
+              aria-label="Close preview"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div className="p-4 dark:bg-neutral-800 bg-gray-50">
+            <h3 className="font-medium">{filament.name}</h3>
+            {filament.notes && (
+              <p className="text-sm text-muted-foreground mt-1">{filament.notes}</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
     </TooltipProvider>
   );
 }

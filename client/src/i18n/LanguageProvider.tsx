@@ -109,6 +109,11 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     setLanguageState('en');
   }, [userData]);
 
+  // Update document language attribute when language changes
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
   // Function to set language and persist it
   const setLanguage = (newLanguage: Language) => {
     setLanguageState(newLanguage);

@@ -71,7 +71,7 @@ DATABASE_URL=postgres://username:password@localhost:5432/filadex
 
 ```bash
 npm run db:push
-node init-data.js
+npm run db:init
 ```
 
 5. **Start the development server**
@@ -80,7 +80,9 @@ node init-data.js
 npm run dev
 ```
 
-The application will be available at http://localhost:5000
+The application will be available at http://localhost:5000 (or the port in `PORT` in `.env`). On macOS, port 5000 is often used by AirPlay Receiver; set `PORT=5001` in `.env` if you see "address already in use".
+
+**Quick local run with Docker Postgres:** Copy `docker-compose.template.yml` to `docker-compose.yml` and run only the `db` service, or use the repo’s `docker-compose.yml` (Postgres only). Then set `DATABASE_URL=postgres://filadex:filadex@localhost:5432/filadex` in `.env`, run `npm run db:push`, `npm run db:init`, and `npm run dev`.
 
 ### Option 2: Docker Deployment
 

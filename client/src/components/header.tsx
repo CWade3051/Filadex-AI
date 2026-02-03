@@ -14,7 +14,9 @@ import {
   List,
   CheckSquare,
   Square,
-  Gauge
+  Gauge,
+  Camera,
+  Key,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -31,6 +33,7 @@ import { SettingsDialog } from "./settings-dialog";
 import { UserManagementModal } from "./user-management-modal";
 import { SharingModal } from "./sharing-modal";
 import { ChangePasswordModal } from "./change-password-modal";
+import { PhotoImportModal } from "./photo-import-modal";
 import { Link, useLocation } from "wouter";
 import { Logo } from "./logo";
 import { useAuth } from "@/lib/auth";
@@ -61,6 +64,7 @@ export function Header({
   const [userManagementOpen, setUserManagementOpen] = useState(false);
   const [sharingModalOpen, setSharingModalOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [photoImportOpen, setPhotoImportOpen] = useState(false);
   const { isAdmin, logout } = useAuth();
   const [_, navigate] = useLocation();
   const { t } = useTranslation();
@@ -117,6 +121,13 @@ export function Header({
                 <Gauge className="mr-2 h-4 w-4" />
                 {t('settings.units.title')}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => {
+                setSettingsDialogTab('ai');
+                setSettingsDialogOpen(true);
+              }}>
+                <Key className="mr-2 h-4 w-4" />
+                {t('apiKey.title')}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5">
                 <div className="flex items-center gap-2">
@@ -149,6 +160,10 @@ export function Header({
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>{t('common.tools')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setPhotoImportOpen(true)}>
+                <Camera className="mr-2 h-4 w-4" />
+                {t('ai.photoImport')}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSharingModalOpen(true)}>
                 <Share2 className="mr-2 h-4 w-4" />
                 {t('filaments.sharedCollection')}
@@ -234,6 +249,15 @@ export function Header({
       <ChangePasswordModal
         open={changePasswordOpen}
         onOpenChange={setChangePasswordOpen}
+      />
+
+      <PhotoImportModal
+        isOpen={photoImportOpen}
+        onClose={() => setPhotoImportOpen(false)}
+        onImportComplete={() => {
+          // Trigger refresh of filaments list
+          window.location.reload();
+        }}
       />
     </header>
   );

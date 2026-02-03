@@ -11,6 +11,10 @@ export const users = pgTable("users", {
   language: text("language").default("en"),
   currency: text("currency").default("EUR"),
   temperatureUnit: text("temperature_unit").default("C"),
+  // Encrypted OpenAI API key for AI features
+  openaiApiKey: text("openai_api_key"),
+  // Preferred OpenAI model for image analysis
+  openaiModel: text("openai_model").default("gpt-4o"),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -25,6 +29,7 @@ export const filaments = pgTable("filaments", {
   colorCode: text("color_code"),
   diameter: numeric("diameter"),
   printTemp: text("print_temp"),
+  printSpeed: text("print_speed"), // Print speed range (e.g., '30-100mm/s')
   totalWeight: numeric("total_weight").notNull(),
   remainingPercentage: numeric("remaining_percentage").notNull(),
   purchaseDate: date("purchase_date"),
@@ -33,7 +38,10 @@ export const filaments = pgTable("filaments", {
   spoolType: text("spool_type"), // 'spooled', 'spoolless'
   dryerCount: integer("dryer_count").default(0), // Anzahl der Trocknungen
   lastDryingDate: date("last_drying_date"), // Datum der letzten Trocknung
-  storageLocation: text("storage_location"), // Lagerort
+  storageLocation: text("storage_location"), // Main storage location (e.g., "A - Bedroom Shelf")
+  locationDetails: text("location_details"), // Sub-location details (e.g., "Top, Row 2, Slot 3")
+  imageUrl: text("image_url"), // URL/path to spool image
+  notes: text("notes"), // User notes about the filament
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -108,6 +116,8 @@ export const diameters = pgTable("diameters", {
 export const storageLocations = pgTable("storage_locations", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
+  description: text("description"), // Optional description of the location
+  capacity: integer("capacity"), // How many spools it can hold
   sortOrder: integer("sort_order").default(999),
   createdAt: timestamp("created_at").defaultNow()
 });
@@ -178,3 +188,40 @@ export const insertUserSharingSchema = createInsertSchema(userSharing).omit({
 
 export type InsertUserSharing = z.infer<typeof insertUserSharingSchema>;
 export type UserSharing = typeof userSharing.$inferSelect;
+
+// Upload sessions for mobile QR code uploads
+export const uploadSessions = pgTable("upload_sessions", {
+  id: serial("id").primaryKey(),
+  sessionToken: text("session_token").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").default("pending"), // 'pending', 'uploading', 'processing', 'completed', 'expired'
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertUploadSessionSchema = createInsertSchema(uploadSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertUploadSession = z.infer<typeof insertUploadSessionSchema>;
+export type UploadSession = typeof uploadSessions.$inferSelect;
+
+// Temporary storage for images uploaded via mobile before processing
+export const pendingUploads = pgTable("pending_uploads", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => uploadSessions.id, { onDelete: "cascade" }),
+  imageUrl: text("image_url").notNull(),
+  extractedData: text("extracted_data"), // JSON string of extracted filament data
+  status: text("status").default("pending"), // 'pending', 'processing', 'ready', 'imported', 'error'
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPendingUploadSchema = createInsertSchema(pendingUploads).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPendingUpload = z.infer<typeof insertPendingUploadSchema>;
+export type PendingUpload = typeof pendingUploads.$inferSelect;

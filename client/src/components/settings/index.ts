@@ -6,5 +6,6 @@ export { ColorsList } from "./settings-colors";
 export { DiametersList } from "./settings-diameters";
 export { StorageLocationsList } from "./settings-storage-locations";
 export { ImportExportCard } from "./settings-import-export-card";
+export { SettingsApiKey } from "./settings-api-key";
 export * from "./settings-types";
 

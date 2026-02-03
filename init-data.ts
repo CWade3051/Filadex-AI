@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { insertFilamentSchema } from './shared/schema';
 import { db } from './server/db';
 import { filaments, manufacturers, materials, diameters, colors, storageLocations } from './shared/schema';

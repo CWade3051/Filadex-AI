@@ -132,7 +132,7 @@ export function registerSettingsRoutes(app: Express): void {
         return res.status(404).json({ message: "Manufacturer not found" });
       }
 
-      res.status(204).end();
+      res.status(200).json({ success: true, message: "Manufacturer deleted" });
     } catch (error) {
       appLogger.error("Error deleting manufacturer:", error);
       res.status(500).json({ message: "Failed to delete manufacturer" });
@@ -280,7 +280,7 @@ export function registerSettingsRoutes(app: Express): void {
         return res.status(404).json({ message: "Material not found" });
       }
 
-      res.status(204).end();
+      res.status(200).json({ success: true, message: "Material deleted" });
     } catch (error) {
       appLogger.error("Error deleting material:", error);
       res.status(500).json({ message: "Failed to delete material" });
@@ -436,7 +436,7 @@ export function registerSettingsRoutes(app: Express): void {
         return res.status(404).json({ message: "Color not found" });
       }
 
-      res.status(204).end();
+      res.status(200).json({ success: true, message: "Color deleted" });
     } catch (error) {
       appLogger.error("Error deleting color:", error);
       res.status(500).json({ message: "Failed to delete color" });
@@ -538,7 +538,7 @@ export function registerSettingsRoutes(app: Express): void {
         return res.status(404).json({ message: "Diameter not found" });
       }
 
-      res.status(204).end();
+      res.status(200).json({ success: true, message: "Diameter deleted" });
     } catch (error) {
       appLogger.error("Error deleting diameter:", error);
       res.status(500).json({ message: "Failed to delete diameter" });
@@ -565,6 +565,61 @@ export function registerSettingsRoutes(app: Express): void {
     } catch (error) {
       appLogger.error("Error fetching storage locations:", error);
       res.status(500).json({ message: "Failed to fetch storage locations" });
+    }
+  });
+
+  // Populate default storage locations
+  app.post("/api/storage-locations/populate-defaults", authenticate, async (req, res) => {
+    try {
+      const defaultLocations = [
+        { name: "A - Bedroom Shelf", sortOrder: 1 },
+        { name: "B - Sealed Storage Small", sortOrder: 2 },
+        { name: "C - Sealed Storage Large #1", sortOrder: 3 },
+        { name: "D - Sealed Storage Large #2", sortOrder: 4 },
+        { name: "E - Above Printer Rod", sortOrder: 5 },
+        { name: "F - 9-Level Rack", sortOrder: 6 },
+        { name: "AMS HT #1 (H2C)", sortOrder: 7 },
+        { name: "AMS HT #2 (H2C)", sortOrder: 8 },
+        { name: "AMS HT #3 (P2S)", sortOrder: 9 },
+        { name: "AMS Pro #1 (H2C)", sortOrder: 10 },
+        { name: "AMS Pro #2 (H2C)", sortOrder: 11 },
+        { name: "AMS Pro #3 (P2S)", sortOrder: 12 },
+        { name: "FLSUN S1 Pro", sortOrder: 13 },
+        { name: "Creality Dryer", sortOrder: 14 },
+        { name: "PolyMaker Dryer", sortOrder: 15 },
+      ];
+
+      const existingLocations = await storage.getStorageLocations();
+      const existingNames = new Set(existingLocations.map(l => l.name.toLowerCase()));
+      
+      let added = 0;
+      let skipped = 0;
+
+      for (const location of defaultLocations) {
+        if (existingNames.has(location.name.toLowerCase())) {
+          skipped++;
+          continue;
+        }
+        
+        await storage.createStorageLocation({ name: location.name });
+        // Update sort order
+        const newLocations = await storage.getStorageLocations();
+        const newLoc = newLocations.find(l => l.name === location.name);
+        if (newLoc) {
+          await storage.updateStorageLocationOrder(newLoc.id, location.sortOrder);
+        }
+        added++;
+      }
+
+      res.status(200).json({ 
+        success: true, 
+        message: `Added ${added} storage locations, skipped ${skipped} existing`,
+        added,
+        skipped
+      });
+    } catch (error) {
+      appLogger.error("Error populating default storage locations:", error);
+      res.status(500).json({ message: "Failed to populate default storage locations" });
     }
   });
 
@@ -644,7 +699,7 @@ export function registerSettingsRoutes(app: Express): void {
         return res.status(404).json({ message: "Storage location not found" });
       }
 
-      res.status(204).end();
+      res.status(200).json({ success: true, message: "Storage location deleted" });
     } catch (error) {
       appLogger.error("Error deleting storage location:", error);
       res.status(500).json({ message: "Failed to delete storage location" });

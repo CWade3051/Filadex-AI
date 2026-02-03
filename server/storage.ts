@@ -17,6 +17,8 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserApiKey(userId: number, encryptedKey: string | null): Promise<void>;
+  updateUserModel(userId: number, model: string): Promise<void>;
 
   // Filament operations
   getFilaments(userId: number): Promise<Filament[]>;
@@ -79,6 +81,20 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async updateUserApiKey(userId: number, encryptedKey: string | null): Promise<void> {
+    await db
+      .update(users)
+      .set({ openaiApiKey: encryptedKey })
+      .where(eq(users.id, userId));
+  }
+
+  async updateUserModel(userId: number, model: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ openaiModel: model } as any)
+      .where(eq(users.id, userId));
+  }
+
   // Filament implementations
   async getFilaments(userId: number): Promise<Filament[]> {
     return await db.select().from(filaments).where(eq(filaments.userId, userId));
@@ -118,8 +134,7 @@ export class DatabaseStorage implements IStorage {
   async getFilament(id: number, userId: number): Promise<Filament | undefined> {
     try {
       const query = db.select().from(filaments)
-        .where(eq(filaments.id, id))
-        .where(eq(filaments.userId, userId));
+        .where(and(eq(filaments.id, id), eq(filaments.userId, userId)));
 
       const [filament] = await query;
 
@@ -143,8 +158,7 @@ export class DatabaseStorage implements IStorage {
       const query = db
         .update(filaments)
         .set(updateFilament)
-        .where(eq(filaments.id, id))
-        .where(eq(filaments.userId, userId))
+        .where(and(eq(filaments.id, id), eq(filaments.userId, userId)))
         .returning();
 
       const [updated] = await query;
@@ -159,8 +173,7 @@ export class DatabaseStorage implements IStorage {
   async deleteFilament(id: number, userId: number): Promise<boolean> {
     const [deleted] = await db
       .delete(filaments)
-      .where(eq(filaments.id, id))
-      .where(eq(filaments.userId, userId))
+      .where(and(eq(filaments.id, id), eq(filaments.userId, userId)))
       .returning();
     return !!deleted;
   }
@@ -438,6 +451,22 @@ export class MemStorage implements IStorage {
     const user: User = { ...insertUser, id };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUserApiKey(userId: number, encryptedKey: string | null): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.openaiApiKey = encryptedKey;
+      this.users.set(userId, user);
+    }
+  }
+
+  async updateUserModel(userId: number, model: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      (user as any).openaiModel = model;
+      this.users.set(userId, user);
+    }
   }
 
   // Filament implementations
