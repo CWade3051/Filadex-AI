@@ -14,8 +14,23 @@ import { extractFilamentDataFromImage, extractFilamentDataFromImages, validateOp
 /**
  * Get the local network IP address for the server
  * This allows mobile devices on the same network to connect
+ * 
+ * For Docker: Set HOST_IP environment variable to your host machine's IP
+ * Example: HOST_IP=192.168.1.100
  */
 function getLocalNetworkIP(): string {
+  // Check for explicit host IP (required for Docker)
+  if (process.env.HOST_IP) {
+    return process.env.HOST_IP;
+  }
+  
+  // Check for public URL (strips protocol and port)
+  if (process.env.PUBLIC_URL) {
+    const url = process.env.PUBLIC_URL;
+    const match = url.match(/^https?:\/\/([^:\/]+)/);
+    if (match) return match[1];
+  }
+  
   const interfaces = os.networkInterfaces();
   
   // Priority order: en0 (macOS WiFi), eth0, wlan0, then any other
