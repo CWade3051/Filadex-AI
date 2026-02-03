@@ -98,6 +98,8 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   } | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const lastImageCountRef = useRef(0); // Track image count to detect new uploads
+  const processedImageUrlsRef = useRef<Set<string>>(new Set()); // Track which images we've already processed
   
   // Image preview state
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -185,6 +187,9 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       setIsProcessing(false);
       setActiveTab("upload");
       setMobileSession(null);
+      setIsPolling(false);
+      lastImageCountRef.current = 0;
+      processedImageUrlsRef.current = new Set();
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
         pollingRef.current = null;
@@ -301,9 +306,11 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     },
   });
 
-  // Start polling for mobile uploads
+  // Start polling for mobile uploads - continues polling to catch "Upload More"
   const startPolling = (token: string) => {
     setIsPolling(true);
+    lastImageCountRef.current = 0;
+    
     pollingRef.current = setInterval(async () => {
       try {
         const response = await fetch(`/api/ai/upload-session/${token}`, {
@@ -311,26 +318,45 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         });
         if (response.ok) {
           const data = await response.json();
-          if (data.imageCount > 0) {
-            // Images received, stop polling
-            if (pollingRef.current) {
-              clearInterval(pollingRef.current);
-              pollingRef.current = null;
-            }
-            setIsPolling(false);
+          
+          // Check if we have new images since last poll
+          if (data.imageCount > lastImageCountRef.current) {
+            const newImageCount = data.imageCount - lastImageCountRef.current;
+            lastImageCountRef.current = data.imageCount;
             
-            // Update processed images with session data
-            setProcessedImages(data.images.map((img: any) => ({
-              imageUrl: img.imageUrl,
-              extractedData: img.extractedData,
-              error: img.error,
-              selected: true,
-              notes: img.extractedData?.notes || "",
-              storageLocation: "",
-              status: img.extractedData?.isSealed !== false ? "sealed" : "opened",
-              remainingPercentage: 100,
-              lastDryingDate: "",
-            })));
+            // Find new images that we haven't processed yet
+            const newImages = data.images.filter((img: any) => 
+              !processedImageUrlsRef.current.has(img.imageUrl)
+            );
+            
+            if (newImages.length > 0) {
+              // Add new image URLs to our tracking set
+              newImages.forEach((img: any) => {
+                processedImageUrlsRef.current.add(img.imageUrl);
+              });
+              
+              // Append new images to processed images
+              const newProcessedImages: ProcessedImage[] = newImages.map((img: any) => ({
+                imageUrl: img.imageUrl,
+                extractedData: img.extractedData,
+                error: img.error,
+                selected: true,
+                notes: img.extractedData?.notes || "",
+                storageLocation: "",
+                status: img.extractedData?.isSealed !== false ? "sealed" : "opened",
+                remainingPercentage: 100,
+                lastDryingDate: "",
+              }));
+              
+              setProcessedImages(prev => [...prev, ...newProcessedImages]);
+              
+              // Switch to review tab and show notification
+              setActiveTab("review");
+              toast({
+                title: t("ai.newPhotosReceived") || "New Photos Received",
+                description: `${newImageCount} new photo(s) uploaded from mobile`,
+              });
+            }
           }
         }
       } catch (error) {
@@ -425,8 +451,23 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         });
       }
       
+      // Remove imported images from the review list
+      setProcessedImages(prev => prev.filter(img => !img.selected));
+      
       onImportComplete();
-      onClose();
+      
+      // If mobile session is still active, stay open and show mobile tab
+      // Otherwise close the modal
+      if (mobileSession && isPolling) {
+        // Stay on mobile tab to allow more uploads
+        setActiveTab("mobile");
+        toast({
+          title: t("ai.sessionStillActive") || "Session Still Active",
+          description: t("ai.canUploadMore") || "You can continue uploading more photos from your phone.",
+        });
+      } else {
+        onClose();
+      }
     },
   });
 
