@@ -43,8 +43,6 @@ const COLOR_MAP: Record<string, string> = {
   fuchsia: "#FF00FF",
   rose: "#FF007F",
   coral: "#FF7F50",
-  lightcoral: "#F08080",
-  "light coral": "#F08080",
   blush: "#DE5D83",
   raspberry: "#E30B5C",
   

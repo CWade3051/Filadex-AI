@@ -60,13 +60,15 @@ jobs:
             type=sha
             type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
 
-      # Build and push Docker image for multiple platforms
+      # Build and push Docker image
+      # Note: Building only for amd64 due to QEMU limitations with native Node modules
+      # Apple Silicon users can run via Rosetta 2 emulation in Docker Desktop
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@v4
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
