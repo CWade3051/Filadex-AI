@@ -150,3 +150,4 @@ This section lists the labels we use to help us track and manage issues and pull
 * `translation` - Issues or PRs related to translations
 
 Thank you for contributing to Filadex!
+
