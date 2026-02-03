@@ -330,32 +330,20 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             );
             
             if (newImages.length > 0) {
-              // Add new image URLs to our tracking set
+              // Mark these images as being processed
               newImages.forEach((img: any) => {
                 processedImageUrlsRef.current.add(img.imageUrl);
               });
               
-              // Append new images to processed images
-              const newProcessedImages: ProcessedImage[] = newImages.map((img: any) => ({
-                imageUrl: img.imageUrl,
-                extractedData: img.extractedData,
-                error: img.error,
-                selected: true,
-                notes: img.extractedData?.notes || "",
-                storageLocation: "",
-                status: img.extractedData?.isSealed !== false ? "sealed" : "opened",
-                remainingPercentage: 100,
-                lastDryingDate: "",
-              }));
-              
-              setProcessedImages(prev => [...prev, ...newProcessedImages]);
-              
-              // Switch to review tab and show notification
-              setActiveTab("review");
+              // Show notification
               toast({
                 title: t("ai.newPhotosReceived") || "New Photos Received",
-                description: `${newImageCount} new photo(s) uploaded from mobile`,
+                description: `${newImageCount} new photo(s) - processing with AI...`,
               });
+              
+              // Trigger AI processing for the session
+              setIsProcessing(true);
+              processMobileSessionMutation.mutate(token);
             }
           }
         }
@@ -379,7 +367,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       return response.json();
     },
     onSuccess: (data) => {
-      const processed: ProcessedImage[] = data.results.map((result: any) => ({
+      const newProcessed: ProcessedImage[] = data.results.map((result: any) => ({
         imageUrl: result.imageUrl,
         extractedData: result.extractedData,
         error: result.error,
@@ -390,7 +378,15 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         remainingPercentage: 100,
         lastDryingDate: "",
       }));
-      setProcessedImages(processed);
+      
+      // Append new results to existing ones (for incremental uploads)
+      // Filter out any that are already in the list by imageUrl
+      setProcessedImages(prev => {
+        const existingUrls = new Set(prev.map(p => p.imageUrl));
+        const trulyNew = newProcessed.filter(p => !existingUrls.has(p.imageUrl));
+        return [...prev, ...trulyNew];
+      });
+      
       setActiveTab("review");
       setIsProcessing(false);
     },
