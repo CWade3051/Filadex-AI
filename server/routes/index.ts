@@ -32,8 +32,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register routes from separate files (all routes extracted)
   registerAuthRoutes(app);
   registerUserRoutes(app);
-  registerFilamentRoutes(app);
+  // IMPORTANT: Batch routes must be registered BEFORE filament routes
+  // so /api/filaments/batch doesn't match /api/filaments/:id
   registerBatchRoutes(app);
+  registerFilamentRoutes(app);
   registerSettingsRoutes(app);
   registerPublicRoutes(app);
   registerStatisticsRoutes(app);

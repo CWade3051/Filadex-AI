@@ -4,8 +4,26 @@ import { authenticate } from "../auth";
 import { InsertFilament } from "@shared/schema";
 import { logger as appLogger } from "../utils/logger";
 import { validateBatchIds } from "../utils/batch-operations";
+import fs from "fs";
+import path from "path";
 
 export function registerBatchRoutes(app: Express): void {
+  // Helper function to delete filament image file
+  const deleteFilamentImage = (imageUrl: string | null | undefined) => {
+    if (!imageUrl) return;
+    try {
+      const relativePath = imageUrl.replace(/^\//, "");
+      const filePath = path.join(process.cwd(), "public", relativePath);
+      
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        appLogger.info(`Deleted image file: ${filePath}`);
+      }
+    } catch (err) {
+      appLogger.warn(`Failed to delete image file for ${imageUrl}:`, err);
+    }
+  };
+
   // BATCH DELETE multiple filaments
   app.delete("/api/filaments/batch", authenticate, async (req, res) => {
     try {
@@ -26,9 +44,15 @@ export function registerBatchRoutes(app: Express): void {
       let deletedCount = 0;
       for (const id of validIds) {
         try {
+          // Get filament first to retrieve imageUrl for cleanup
+          const filament = await storage.getFilament(id, req.userId);
           const success = await storage.deleteFilament(id, req.userId);
           if (success) {
             deletedCount++;
+            // Clean up the image file
+            if (filament) {
+              deleteFilamentImage(filament.imageUrl);
+            }
           }
         } catch (err) {
           appLogger.error(`Error deleting filament with ID ${id}:`, err);
