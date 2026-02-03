@@ -8,6 +8,8 @@ import { logger as appLogger } from "../utils/logger";
 import { validateId } from "../utils/validation";
 import { parseCSVLine, detectCSVFormat, escapeCsvField } from "../utils/csv-parser";
 import { validateBatchIds } from "../utils/batch-operations";
+import fs from "fs";
+import path from "path";
 
 export function registerFilamentRoutes(app: Express): void {
   // GET all filaments with optional export
@@ -418,6 +420,25 @@ export function registerFilamentRoutes(app: Express): void {
     }
   });
 
+  // Helper function to delete filament image file
+  const deleteFilamentImage = (imageUrl: string | null | undefined) => {
+    if (!imageUrl) return;
+    try {
+      // imageUrl is like "/uploads/filaments/filament-xxx.jpg"
+      // Need to resolve to actual file path
+      const relativePath = imageUrl.replace(/^\//, ""); // Remove leading slash
+      const filePath = path.join(process.cwd(), "public", relativePath);
+      
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        appLogger.info(`Deleted image file: ${filePath}`);
+      }
+    } catch (err) {
+      appLogger.warn(`Failed to delete image file for ${imageUrl}:`, err);
+      // Don't throw - image cleanup failure shouldn't prevent filament deletion
+    }
+  };
+
   // DELETE a filament
   app.delete("/api/filaments/:id", authenticate, async (req, res) => {
     try {
@@ -426,15 +447,68 @@ export function registerFilamentRoutes(app: Express): void {
         return res.status(400).json({ message: "Invalid filament ID" });
       }
 
+      // Get filament first to retrieve imageUrl for cleanup
+      const filament = await storage.getFilament(id, req.userId);
+      if (!filament) {
+        return res.status(404).json({ message: "Filament not found" });
+      }
+
       const success = await storage.deleteFilament(id, req.userId);
       if (!success) {
         return res.status(404).json({ message: "Filament not found" });
       }
 
+      // Clean up the image file
+      deleteFilamentImage(filament.imageUrl);
+
       res.status(200).json({ success: true, message: "Filament deleted" });
     } catch (error) {
       appLogger.error("Error deleting filament:", error);
       res.status(500).json({ message: "Failed to delete filament" });
+    }
+  });
+
+  // POST cleanup orphaned images (admin only)
+  app.post("/api/filaments/cleanup-images", authenticate, async (req, res) => {
+    try {
+      // Get all filaments to find valid imageUrls
+      const filaments = await storage.getFilaments(req.userId);
+      const validImageUrls = new Set(
+        filaments
+          .filter(f => f.imageUrl)
+          .map(f => f.imageUrl!.replace(/^\/uploads\/filaments\//, ""))
+      );
+
+      const uploadsDir = path.join(process.cwd(), "public", "uploads", "filaments");
+      
+      if (!fs.existsSync(uploadsDir)) {
+        return res.json({ deleted: 0, message: "No uploads directory found" });
+      }
+
+      const files = fs.readdirSync(uploadsDir);
+      const orphanedFiles: string[] = [];
+
+      for (const file of files) {
+        if (!validImageUrls.has(file)) {
+          orphanedFiles.push(file);
+          const filePath = path.join(uploadsDir, file);
+          try {
+            fs.unlinkSync(filePath);
+            appLogger.info(`Deleted orphaned image: ${file}`);
+          } catch (err) {
+            appLogger.warn(`Failed to delete orphaned image ${file}:`, err);
+          }
+        }
+      }
+
+      res.json({ 
+        deleted: orphanedFiles.length, 
+        files: orphanedFiles,
+        message: `Cleaned up ${orphanedFiles.length} orphaned image(s)` 
+      });
+    } catch (error) {
+      appLogger.error("Error cleaning up images:", error);
+      res.status(500).json({ message: "Failed to cleanup images" });
     }
   });
 }
