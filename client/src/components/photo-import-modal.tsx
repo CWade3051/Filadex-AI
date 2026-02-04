@@ -1072,6 +1072,46 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 </div>
               )}
               
+              {/* Bulk storage location selector */}
+              {processedImages.length > 0 && (
+                <div className="flex items-center gap-4 mb-4 p-3 bg-muted/50 rounded-lg shrink-0">
+                  <div className="flex items-center gap-2 flex-1">
+                    <Label className="text-sm font-medium whitespace-nowrap">
+                      {t("ai.setLocationForAll") || "Set location for all:"}
+                    </Label>
+                    <div className="flex-1 max-w-xs">
+                      <Combobox
+                        options={storageLocationOptions}
+                        value=""
+                        onValueChange={(value) => {
+                          // Apply to all items
+                          setProcessedImages(prev => prev.map(img => ({
+                            ...img,
+                            storageLocation: value
+                          })));
+                        }}
+                        placeholder={t("filament.selectStorageLocation") || "Select storage location..."}
+                        allowCustom={true}
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Clear all storage locations
+                        setProcessedImages(prev => prev.map(img => ({
+                          ...img,
+                          storageLocation: ""
+                        })));
+                      }}
+                      className="text-muted-foreground"
+                    >
+                      {t("ai.clearLocations") || "Clear"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
               <div className="flex items-center justify-between mb-4 shrink-0">
                 <span className="text-sm">
                   {selectedCount} of {processedImages.length} selected for import

@@ -696,6 +696,8 @@ const translations = {
     viewResults: 'View Results',
     clearAll: 'Clear All',
     confirmClearAll: 'Clear all pending imports?',
+    setLocationForAll: 'Set location for all:',
+    clearLocations: 'Clear',
     imagePreview: 'Image Preview',
     extractedFields: 'Extracted Fields',
     editBeforeImport: 'Edit values before importing',
