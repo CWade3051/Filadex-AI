@@ -850,9 +850,14 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 <Smartphone className="h-4 w-4 mr-2" />
                 {t("ai.mobileUpload")}
               </TabsTrigger>
-              <TabsTrigger value="review" disabled={processedImages.length === 0}>
+              <TabsTrigger value="review" disabled={processedImages.length === 0 && !isProcessing}>
                 <Check className="h-4 w-4 mr-2" />
                 {t("ai.reviewResults")}
+                {isProcessing && pendingPhotoCount > 0 && (
+                  <span className="ml-1 text-xs bg-primary/20 px-1.5 py-0.5 rounded-full">
+                    {pendingPhotoCount}
+                  </span>
+                )}
               </TabsTrigger>
             </TabsList>
 
@@ -1017,6 +1022,26 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
 
             {/* Review Tab */}
             <TabsContent value="review" className="flex-1 flex flex-col mt-4 h-full overflow-hidden">
+              {/* Show progress bar when processing */}
+              {isProcessing && pendingPhotoCount > 0 && (
+                <div className="mb-4 p-3 bg-primary/10 rounded-lg shrink-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span className="text-sm font-medium text-primary">
+                      {t("ai.processingPhotos")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>{processedImages.length} completed</span>
+                    <span>{pendingPhotoCount} pending</span>
+                  </div>
+                  <Progress 
+                    value={(processedImages.length / (processedImages.length + pendingPhotoCount)) * 100} 
+                    className="h-2"
+                  />
+                </div>
+              )}
+              
               <div className="flex items-center justify-between mb-4 shrink-0">
                 <span className="text-sm">
                   {selectedCount} of {processedImages.length} selected for import
@@ -1058,6 +1083,17 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
 
               <div className="flex-1 overflow-auto" style={{ maxHeight: 'calc(90vh - 220px)' }}>
                 <div className="space-y-4 pr-4 pb-4">
+                  {processedImages.length === 0 && isProcessing && (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+                      <h3 className="text-lg font-medium mb-2">
+                        {t("ai.processingPhotos")}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Results will appear here as each photo is processed...
+                      </p>
+                    </div>
+                  )}
                   {processedImages.map((img, index) => (
                     <div
                       key={index}
