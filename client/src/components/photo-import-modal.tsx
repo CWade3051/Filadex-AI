@@ -117,8 +117,31 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     return [];
   });
   
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 });
+  // Load persisted processing state from localStorage
+  const [isProcessing, setIsProcessing] = useState(() => {
+    try {
+      const saved = localStorage.getItem('filadex_processing_state');
+      if (saved) {
+        const state = JSON.parse(saved);
+        return state.isProcessing || false;
+      }
+    } catch (e) {
+      console.error('Failed to load processing state:', e);
+    }
+    return false;
+  });
+  const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number }>(() => {
+    try {
+      const saved = localStorage.getItem('filadex_processing_state');
+      if (saved) {
+        const state = JSON.parse(saved);
+        return state.progress || { current: 0, total: 0 };
+      }
+    } catch (e) {
+      console.error('Failed to load processing progress:', e);
+    }
+    return { current: 0, total: 0 };
+  });
   // Load persisted mobile session from localStorage
   const [mobileSession, setMobileSession] = useState<{
     token: string;
@@ -143,7 +166,19 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     return null;
   });
   const [isPolling, setIsPolling] = useState(false);
-  const [pendingPhotoCount, setPendingPhotoCount] = useState(0); // Photos uploaded but not yet processed
+  // Load persisted pending photo count from localStorage
+  const [pendingPhotoCount, setPendingPhotoCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem('filadex_processing_state');
+      if (saved) {
+        const state = JSON.parse(saved);
+        return state.pendingCount || 0;
+      }
+    } catch (e) {
+      console.error('Failed to load pending count:', e);
+    }
+    return 0;
+  }); // Photos uploaded but not yet processed
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const processingPollingRef = useRef<NodeJS.Timeout | null>(null); // For polling processing results
   const detectedUploadUrlsRef = useRef<Set<string>>(new Set()); // Track uploads detected by startPolling (prevents re-detection)
@@ -187,7 +222,24 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       console.error('Failed to save session:', e);
     }
   }, [mobileSession]);
-  
+
+  // Persist processing state to localStorage
+  useEffect(() => {
+    try {
+      if (isProcessing || processingProgress.total > 0 || pendingPhotoCount > 0) {
+        localStorage.setItem('filadex_processing_state', JSON.stringify({
+          isProcessing,
+          progress: processingProgress,
+          pendingCount: pendingPhotoCount
+        }));
+      } else {
+        localStorage.removeItem('filadex_processing_state');
+      }
+    } catch (e) {
+      console.error('Failed to save processing state:', e);
+    }
+  }, [isProcessing, processingProgress, pendingPhotoCount]);
+
   // Function to delete an item from review
   const handleDeleteFromReview = (index: number) => {
     setProcessedImages(prev => prev.filter((_, i) => i !== index));
@@ -271,14 +323,13 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     { value: "3", label: "3kg" },
   ];
 
-  // Clean up on close - preserve session and keep polling for new uploads
+  // Clean up on close - preserve session, processing state, and keep polling for new uploads
   useEffect(() => {
     if (!isOpen) {
       setSelectedFiles([]);
-      // Keep processedImages and mobileSession - they're persisted in localStorage
+      // Keep processedImages, mobileSession, and isProcessing - they're persisted in localStorage
       // Keep polling running so we detect new uploads even when modal is closed
-      // Only reset UI-specific state
-      setIsProcessing(false);
+      // DO NOT reset isProcessing here - it should persist until processing actually completes
       // Go to review tab if there are pending items, otherwise upload
       setActiveTab(processedImages.length > 0 ? "review" : "upload");
     }
@@ -557,6 +608,47 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       }
     }, 2000); // Poll every 2 seconds for faster updates
   };
+
+  // Sync state from localStorage when modal opens (handles case where component stays mounted)
+  useEffect(() => {
+    if (isOpen) {
+      try {
+        const saved = localStorage.getItem('filadex_processing_state');
+        if (saved) {
+          const state = JSON.parse(saved);
+          console.log('Restoring processing state:', state);
+          if (state.isProcessing) {
+            setIsProcessing(state.isProcessing);
+          }
+          if (state.progress) {
+            setProcessingProgress(state.progress);
+          }
+          if (state.pendingCount !== undefined) {
+            setPendingPhotoCount(state.pendingCount);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to restore processing state:', e);
+      }
+    }
+  }, [isOpen]);
+
+  // Resume polling when modal opens and there's an active session with processing
+  useEffect(() => {
+    if (isOpen && mobileSession && isProcessing) {
+      // Check if session is still valid
+      if (new Date(mobileSession.expiresAt) > new Date()) {
+        // Resume polling for new uploads
+        if (!pollingRef.current) {
+          startPolling(mobileSession.token);
+        }
+        // Resume processing polling if we have pending items
+        if (!processingPollingRef.current && (pendingPhotoCount > 0 || processingProgress.current < processingProgress.total)) {
+          startProcessingPolling(mobileSession.token);
+        }
+      }
+    }
+  }, [isOpen, mobileSession, isProcessing, pendingPhotoCount, processingProgress.current, processingProgress.total]);
 
   // Process mobile session images - starts processing and polls for results
   const processMobileSessionMutation = useMutation({
@@ -837,11 +929,30 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             }
             
             // Auto-update the product name to match the new color
-            if (updatedData.name && img.extractedData.colorName) {
-              // Replace the old color name in the product name with the new one
+            if (updatedData.name) {
               const oldColor = img.extractedData.colorName;
-              const regex = new RegExp(oldColor, 'gi');
-              updatedData.name = updatedData.name.replace(regex, value);
+              const currentName = updatedData.name;
+              
+              // Check if the old color exists in the name (and isn't "Unknown")
+              if (oldColor && oldColor !== "Unknown" && currentName.toLowerCase().includes(oldColor.toLowerCase())) {
+                // Replace the old color name with the new one
+                const regex = new RegExp(oldColor, 'gi');
+                updatedData.name = currentName.replace(regex, value);
+              } else {
+                // Old color not in name or was "Unknown" - need to append/reconstruct
+                // Build name from manufacturer + material + new color
+                const manufacturer = updatedData.manufacturer || img.extractedData.manufacturer || "";
+                const material = updatedData.material || img.extractedData.material || "";
+                
+                if (manufacturer && material) {
+                  updatedData.name = `${manufacturer} ${material} ${value}`.trim();
+                } else if (material) {
+                  updatedData.name = `${material} ${value}`.trim();
+                } else {
+                  // Just append the color to the existing name if it doesn't already end with a color
+                  updatedData.name = `${currentName} ${value}`.trim();
+                }
+              }
             }
           }
           
@@ -921,9 +1032,9 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
               <TabsTrigger value="review" disabled={processedImages.length === 0 && !isProcessing}>
                 <Check className="h-4 w-4 mr-2" />
                 {t("ai.reviewResults")}
-                {isProcessing && pendingPhotoCount > 0 && (
-                  <span className="ml-1 text-xs bg-primary/20 px-1.5 py-0.5 rounded-full">
-                    {pendingPhotoCount}
+                {isProcessing && (pendingPhotoCount > 0 || (processingProgress.total > processingProgress.current)) && (
+                  <span className="ml-1 text-xs bg-primary/20 px-1.5 py-0.5 rounded-full animate-pulse">
+                    {pendingPhotoCount > 0 ? pendingPhotoCount : (processingProgress.total - processingProgress.current)}
                   </span>
                 )}
               </TabsTrigger>
@@ -1036,22 +1147,28 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                       </div>
                       <div className="w-full max-w-xs mx-auto">
                         <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span>{processedImages.length} completed</span>
-                          <span>{pendingPhotoCount} pending</span>
+                          <span>{processingProgress.current > 0 ? processingProgress.current : processedImages.length} completed</span>
+                          <span>{pendingPhotoCount > 0 ? pendingPhotoCount : (processingProgress.total - processingProgress.current)} pending</span>
                         </div>
                         <Progress 
-                          value={pendingPhotoCount > 0 ? (processedImages.length / (processedImages.length + pendingPhotoCount)) * 100 : 0} 
+                          value={processingProgress.total > 0 
+                            ? (processingProgress.current / processingProgress.total) * 100 
+                            : (pendingPhotoCount > 0 ? (processedImages.length / (processedImages.length + pendingPhotoCount)) * 100 : 0)
+                          } 
                           className="h-2"
                         />
                         <p className="text-xs text-center mt-1 text-muted-foreground">
-                          {processedImages.length} of {processedImages.length + pendingPhotoCount} photos processed
+                          {processingProgress.total > 0 
+                            ? `${processingProgress.current} of ${processingProgress.total} photos processed`
+                            : `${processedImages.length} of ${processedImages.length + pendingPhotoCount} photos processed`
+                          }
                         </p>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {t("ai.canUploadMoreWhileProcessing") || "You can upload more photos while processing"}
                       </p>
                     </div>
-                  ) : processedImages.length === 0 && pendingPhotoCount === 0 ? (
+                  ) : processedImages.length === 0 && pendingPhotoCount === 0 && processingProgress.total === 0 ? (
                     <div className="flex items-center justify-center gap-2 text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       {t("ai.waitingForPhotos")}
@@ -1091,7 +1208,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             {/* Review Tab */}
             <TabsContent value="review" className="flex-1 flex flex-col mt-4 h-full overflow-hidden">
               {/* Show progress bar when processing */}
-              {isProcessing && pendingPhotoCount > 0 && (
+              {isProcessing && (pendingPhotoCount > 0 || (processingProgress.total > 0 && processingProgress.current < processingProgress.total)) && (
                 <div className="mb-4 p-3 bg-primary/10 rounded-lg shrink-0">
                   <div className="flex items-center gap-2 mb-2">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -1100,11 +1217,14 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                     </span>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                    <span>{processedImages.length} completed</span>
-                    <span>{pendingPhotoCount} pending</span>
+                    <span>{processingProgress.current > 0 ? processingProgress.current : processedImages.length} completed</span>
+                    <span>{pendingPhotoCount > 0 ? pendingPhotoCount : (processingProgress.total - processingProgress.current)} pending</span>
                   </div>
                   <Progress 
-                    value={(processedImages.length / (processedImages.length + pendingPhotoCount)) * 100} 
+                    value={processingProgress.total > 0 
+                      ? (processingProgress.current / processingProgress.total) * 100 
+                      : (processedImages.length / (processedImages.length + pendingPhotoCount)) * 100
+                    } 
                     className="h-2"
                   />
                 </div>

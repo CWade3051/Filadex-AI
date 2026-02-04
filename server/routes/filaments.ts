@@ -468,6 +468,210 @@ export function registerFilamentRoutes(app: Express): void {
     }
   });
 
+  // PATCH update spool weight and auto-calculate remaining percentage
+  app.patch("/api/filaments/:id/weight", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid filament ID" });
+      }
+
+      const { currentWeight, emptySpoolWeight } = req.body;
+
+      // Validate inputs
+      if (currentWeight === undefined || currentWeight === null) {
+        return res.status(400).json({ message: "Current weight is required" });
+      }
+
+      const filament = await storage.getFilament(id, req.userId);
+      if (!filament) {
+        return res.status(404).json({ message: "Filament not found" });
+      }
+
+      // Use provided empty spool weight or existing or default (200g)
+      const emptyWeight = emptySpoolWeight !== undefined 
+        ? parseFloat(emptySpoolWeight) 
+        : (filament.emptySpoolWeight ? parseFloat(filament.emptySpoolWeight) : 200);
+      
+      const totalWeight = parseFloat(filament.totalWeight);
+      const current = parseFloat(currentWeight);
+
+      // Calculate remaining percentage: ((currentWeight - emptySpoolWeight) / totalWeight) * 100
+      const filamentWeight = current - emptyWeight;
+      let remainingPercentage = Math.round((filamentWeight / totalWeight) * 100);
+      
+      // Clamp to 0-100
+      remainingPercentage = Math.max(0, Math.min(100, remainingPercentage));
+
+      const updateData: any = {
+        currentWeight: current.toString(),
+        emptySpoolWeight: emptyWeight.toString(),
+        lastWeighedAt: new Date(),
+        remainingPercentage: remainingPercentage.toString(),
+      };
+
+      // Auto-archive if remaining is 0%
+      if (remainingPercentage === 0 && !filament.isArchived) {
+        updateData.isArchived = true;
+        updateData.archivedAt = new Date();
+        updateData.archiveReason = 'empty';
+      }
+
+      const updatedFilament = await storage.updateFilament(id, updateData, req.userId);
+      
+      res.json({
+        ...updatedFilament,
+        calculatedRemaining: remainingPercentage,
+        filamentWeight: filamentWeight,
+      });
+    } catch (error) {
+      appLogger.error("Error updating filament weight:", error);
+      res.status(500).json({ message: "Failed to update filament weight" });
+    }
+  });
+
+  // PATCH archive a spool
+  app.patch("/api/filaments/:id/archive", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid filament ID" });
+      }
+
+      const { reason } = req.body;
+
+      const filament = await storage.getFilament(id, req.userId);
+      if (!filament) {
+        return res.status(404).json({ message: "Filament not found" });
+      }
+
+      const updateData = {
+        isArchived: true,
+        archivedAt: new Date(),
+        archiveReason: reason || 'manual',
+      };
+
+      const updatedFilament = await storage.updateFilament(id, updateData, req.userId);
+      res.json(updatedFilament);
+    } catch (error) {
+      appLogger.error("Error archiving filament:", error);
+      res.status(500).json({ message: "Failed to archive filament" });
+    }
+  });
+
+  // PATCH unarchive a spool
+  app.patch("/api/filaments/:id/unarchive", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid filament ID" });
+      }
+
+      const filament = await storage.getFilament(id, req.userId);
+      if (!filament) {
+        return res.status(404).json({ message: "Filament not found" });
+      }
+
+      const updateData = {
+        isArchived: false,
+        archivedAt: null,
+        archiveReason: null,
+      };
+
+      const updatedFilament = await storage.updateFilament(id, updateData, req.userId);
+      res.json(updatedFilament);
+    } catch (error) {
+      appLogger.error("Error unarchiving filament:", error);
+      res.status(500).json({ message: "Failed to unarchive filament" });
+    }
+  });
+
+  // GET find filaments with similar colors
+  app.get("/api/filaments/similar-colors", authenticate, async (req, res) => {
+    try {
+      const { hex, tolerance = '30' } = req.query;
+
+      if (!hex || typeof hex !== 'string') {
+        return res.status(400).json({ message: "Hex color parameter is required" });
+      }
+
+      // Remove # if present
+      const cleanHex = hex.replace(/^#/, '').toUpperCase();
+      if (!/^[0-9A-F]{6}$/.test(cleanHex)) {
+        return res.status(400).json({ message: "Invalid hex color format" });
+      }
+
+      const toleranceNum = parseInt(tolerance as string) || 30;
+
+      // Get all filaments
+      const filaments = await storage.getFilaments(req.userId);
+
+      // Convert hex to RGB
+      const hexToRgb = (h: string) => ({
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16),
+      });
+
+      // Convert RGB to LAB for better perceptual color matching
+      const rgbToLab = (rgb: { r: number; g: number; b: number }) => {
+        // First convert to XYZ
+        let r = rgb.r / 255;
+        let g = rgb.g / 255;
+        let b = rgb.b / 255;
+
+        r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+        g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+        b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+
+        const x = (r * 0.4124564 + g * 0.3575761 + b * 0.1804375) / 0.95047;
+        const y = (r * 0.2126729 + g * 0.7151522 + b * 0.0721750);
+        const z = (r * 0.0193339 + g * 0.1191920 + b * 0.9503041) / 1.08883;
+
+        const f = (t: number) => t > 0.008856 ? Math.pow(t, 1/3) : (7.787 * t) + (16/116);
+
+        return {
+          l: (116 * f(y)) - 16,
+          a: 500 * (f(x) - f(y)),
+          b: 200 * (f(y) - f(z)),
+        };
+      };
+
+      // Calculate Delta E (CIE76 - simpler but good enough)
+      const deltaE = (lab1: { l: number; a: number; b: number }, lab2: { l: number; a: number; b: number }) => {
+        return Math.sqrt(
+          Math.pow(lab1.l - lab2.l, 2) +
+          Math.pow(lab1.a - lab2.a, 2) +
+          Math.pow(lab1.b - lab2.b, 2)
+        );
+      };
+
+      const targetRgb = hexToRgb(cleanHex);
+      const targetLab = rgbToLab(targetRgb);
+
+      // Calculate distance for each filament
+      const results = filaments
+        .filter(f => f.colorCode && /^#?[0-9A-Fa-f]{6}$/.test(f.colorCode))
+        .map(f => {
+          const fHex = f.colorCode!.replace(/^#/, '').toUpperCase();
+          const fRgb = hexToRgb(fHex);
+          const fLab = rgbToLab(fRgb);
+          const distance = deltaE(targetLab, fLab);
+          return {
+            ...f,
+            colorDistance: Math.round(distance * 10) / 10,
+          };
+        })
+        .filter(f => f.colorDistance <= toleranceNum)
+        .sort((a, b) => a.colorDistance - b.colorDistance);
+
+      res.json(results);
+    } catch (error) {
+      appLogger.error("Error finding similar colors:", error);
+      res.status(500).json({ message: "Failed to find similar colors" });
+    }
+  });
+
   // POST cleanup orphaned images (admin only)
   app.post("/api/filaments/cleanup-images", authenticate, async (req, res) => {
     try {

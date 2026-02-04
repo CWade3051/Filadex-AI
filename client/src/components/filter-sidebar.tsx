@@ -5,6 +5,8 @@ import { Filament } from "@shared/schema";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -25,7 +27,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Check, ChevronDown, ChevronsUpDown, X, Search, Plus } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, X, Search, Plus, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n";
 
@@ -63,6 +65,12 @@ interface Color {
   createdAt: string;
 }
 
+interface StorageLocation {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
 interface FilterSidebarProps {
   onSearchChange: (search: string) => void;
   onMaterialChange: (materials: string[]) => void;
@@ -70,6 +78,9 @@ interface FilterSidebarProps {
   onMinRemaining: (value: number) => void;
   onManufacturerChange: (manufacturers: string[]) => void;
   onColorChange: (colors: string[]) => void;
+  onStorageLocationChange?: (locations: string[]) => void;
+  onShowArchivedChange?: (show: boolean) => void;
+  showArchived?: boolean;
   filaments?: Filament[];
 }
 
@@ -80,6 +91,9 @@ export function FilterSidebar({
   onMinRemaining,
   onManufacturerChange,
   onColorChange,
+  onStorageLocationChange,
+  onShowArchivedChange,
+  showArchived = false,
   filaments = []
 }: FilterSidebarProps) {
   const { t } = useTranslation();
@@ -87,6 +101,8 @@ export function FilterSidebar({
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [selectedManufacturers, setSelectedManufacturers] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [locationPopoverOpen, setLocationPopoverOpen] = useState(false);
   const [maxRemaining, setMaxRemaining] = useState(100);  // Show filaments with AT MOST this %
   const [minRemaining, setMinRemaining] = useState(0);    // Show filaments with AT LEAST this %
 
@@ -104,6 +120,11 @@ export function FilterSidebar({
   const { data: colors = [], isLoading: isLoadingColors } = useQuery({
     queryKey: ['/api/colors'],
     queryFn: () => apiRequest<Color[]>('/api/colors')
+  });
+
+  const { data: storageLocations = [], isLoading: isLoadingLocations } = useQuery({
+    queryKey: ['/api/storage-locations'],
+    queryFn: () => apiRequest<StorageLocation[]>('/api/storage-locations')
   });
 
   // Filter manufacturers, materials, and colors to only show those that exist in actual filaments
@@ -137,6 +158,17 @@ export function FilterSidebar({
     return colors.filter(c => usedColors.has(c.name));
   }, [colors, filaments]);
 
+  // Only show storage locations that are actually used by filaments
+  const availableLocations = useMemo(() => {
+    if (filaments.length === 0) return [];
+    const usedLocations = new Set(
+      filaments
+        .map(f => f.storageLocation)
+        .filter((l): l is string => !!l && l.trim() !== '')
+    );
+    return storageLocations.filter(l => usedLocations.has(l.name));
+  }, [storageLocations, filaments]);
+
   // Update parent component when filters change
   useEffect(() => {
     onSearchChange(searchTerm);
@@ -153,6 +185,12 @@ export function FilterSidebar({
   useEffect(() => {
     onColorChange(selectedColors);
   }, [selectedColors, onColorChange]);
+
+  useEffect(() => {
+    if (onStorageLocationChange) {
+      onStorageLocationChange(selectedLocations);
+    }
+  }, [selectedLocations, onStorageLocationChange]);
 
   useEffect(() => {
     onMinRemaining(minRemaining);
@@ -218,6 +256,28 @@ export function FilterSidebar({
   // Clear all selected colors
   const clearColors = () => {
     setSelectedColors([]);
+  };
+
+  // Handle storage location selection/deselection
+  const handleLocationSelect = (location: string) => {
+    setSelectedLocations(prev => {
+      if (prev.includes(location)) {
+        return prev.filter(l => l !== location);
+      }
+      return [...prev, location];
+    });
+    // Close the popover after selection
+    setLocationPopoverOpen(false);
+  };
+
+  // Remove a single location from selection
+  const removeLocation = (location: string) => {
+    setSelectedLocations(prev => prev.filter(l => l !== location));
+  };
+
+  // Clear all selected locations
+  const clearLocations = () => {
+    setSelectedLocations([]);
   };
 
   return (
@@ -486,6 +546,81 @@ export function FilterSidebar({
       </div>
 
       <div className="mb-6">
+        <h2 className="text-lg font-medium dark:text-neutral-400 text-gray-700 mb-3">{t('filters.storageLocationFilter') || 'Storage Location'}</h2>
+        <div className="space-y-4">
+          <Popover open={locationPopoverOpen} onOpenChange={setLocationPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={locationPopoverOpen}
+                className="w-full justify-between dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-700 dark:hover:text-neutral-100 bg-white border-gray-300 text-gray-800 hover:bg-gray-100 hover:text-gray-900"
+              >
+                {selectedLocations.length === 0
+                  ? (t('filters.selectStorageLocation') || 'Select location...')
+                  : `${selectedLocations.length} ${t('filters.selected')}`}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full p-0">
+              <Command>
+                <CommandInput placeholder={t('filters.searchStorageLocation') || 'Search locations...'} />
+                <CommandEmpty>{t('filters.noStorageLocationFound') || 'No location found.'}</CommandEmpty>
+                <CommandGroup className="max-h-[300px] overflow-y-auto">
+                  {availableLocations.map((location) => (
+                    <CommandItem
+                      key={location.id}
+                      value={location.name}
+                      onSelect={() => handleLocationSelect(location.name)}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          selectedLocations.includes(location.name) ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {location.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          {selectedLocations.length > 0 && (
+            <div className="mt-2">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm dark:text-neutral-400 text-gray-600">{t('filters.selectedStorageLocations') || 'Selected Locations:'}</span>
+                <button
+                  className="text-xs dark:text-neutral-400 dark:hover:text-neutral-200 text-gray-500 hover:text-gray-700 transition-colors"
+                  onClick={clearLocations}
+                >
+                  {t('filters.clearAll')}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedLocations.map(location => (
+                  <Badge
+                    key={location}
+                    variant="outline"
+                    className="theme-badge flex items-center gap-1 dark:bg-primary/10 dark:text-neutral-200 bg-primary/10 text-gray-800"
+                  >
+                    {location}
+                    <button
+                      onClick={() => removeLocation(location)}
+                      className="hover:text-white ml-1"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-6">
         <h2 className="text-lg font-medium dark:text-neutral-400 text-gray-700 mb-3">{t('filters.inventory')}</h2>
         <div className="space-y-4">
           {/* Max Remaining Filter - show filaments with AT MOST this % */}
@@ -535,6 +670,23 @@ export function FilterSidebar({
               {t('filters.showFilamentsWithMin') || "Show filaments with min."} {minRemaining}% {t('filters.fillLevel')}
             </div>
           </div>
+
+          {/* Show Archived Toggle */}
+          {onShowArchivedChange && (
+            <div className="flex items-center justify-between pt-2 border-t dark:border-neutral-700 border-gray-200">
+              <div className="flex items-center gap-2">
+                <Archive className="h-4 w-4 dark:text-neutral-400 text-gray-500" />
+                <Label htmlFor="show-archived" className="text-sm dark:text-neutral-400 text-gray-700 cursor-pointer">
+                  {t('filaments.showArchived')}
+                </Label>
+              </div>
+              <Switch
+                id="show-archived"
+                checked={showArchived}
+                onCheckedChange={onShowArchivedChange}
+              />
+            </div>
+          )}
         </div>
       </div>
     </aside>

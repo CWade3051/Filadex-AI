@@ -9,6 +9,7 @@ import { FilterSidebar } from "@/components/filter-sidebar";
 import { FilamentGrid } from "@/components/filament-grid";
 import { FilamentModal } from "@/components/filament-modal";
 import { DeleteModal } from "@/components/delete-modal";
+import { WeightModal } from "@/components/weight-modal";
 import { MaterialColorChart } from "@/components/material-color-chart";
 import { StatisticsAccordion } from "@/components/statistics";
 import { BatchActionsPanel } from "@/components/batch-actions-panel";
@@ -20,8 +21,10 @@ export default function Home() {
   const { t } = useTranslation();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showWeightModal, setShowWeightModal] = useState(false);
   const [selectedFilament, setSelectedFilament] = useState<Filament | undefined>(undefined);
   const [copyFromFilament, setCopyFromFilament] = useState<Filament | undefined>(undefined);
+  const [weightFilament, setWeightFilament] = useState<Filament | null>(null);
 
   // Batch selection state
   const [selectionMode, setSelectionMode] = useState(false);
@@ -32,8 +35,10 @@ export default function Home() {
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [selectedManufacturers, setSelectedManufacturers] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [selectedStorageLocations, setSelectedStorageLocations] = useState<string[]>([]);
   const [maxRemainingFilter, setMaxRemainingFilter] = useState(100); // Show filaments with AT MOST this %
   const [minRemainingFilter, setMinRemainingFilter] = useState(0);   // Show filaments with AT LEAST this %
+  const [showArchived, setShowArchived] = useState(false); // Show/hide archived filaments
 
   // Fetch filaments with auto-refresh
   const { data: filaments = [], isLoading, refetch: refetchFilaments } = useQuery<Filament[]>({
@@ -44,6 +49,9 @@ export default function Home() {
 
   // Filter filaments based on all filters
   const filteredFilaments = filaments.filter(filament => {
+    // Filter by archived status
+    const matchesArchived = showArchived || !filament.isArchived;
+
     // Filter by search term
     const matchesSearch = searchTerm.trim() === '' ||
       filament.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -61,12 +69,16 @@ export default function Home() {
     const matchesColor = selectedColors.length === 0 ||
       (filament.colorName && selectedColors.includes(filament.colorName));
 
+    // Filter by storage location
+    const matchesStorageLocation = selectedStorageLocations.length === 0 ||
+      (filament.storageLocation && selectedStorageLocations.includes(filament.storageLocation));
+
     // Filter by remaining percentage
     const remaining = Number(filament.remainingPercentage);
     const matchesMaxRemaining = maxRemainingFilter >= 100 || remaining <= maxRemainingFilter;
     const matchesMinRemaining = minRemainingFilter <= 0 || remaining >= minRemainingFilter;
 
-    return matchesSearch && matchesMaterial && matchesManufacturer && matchesColor && matchesMaxRemaining && matchesMinRemaining;
+    return matchesArchived && matchesSearch && matchesMaterial && matchesManufacturer && matchesColor && matchesStorageLocation && matchesMaxRemaining && matchesMinRemaining;
   });
 
   // Add a new filament
@@ -167,6 +179,63 @@ export default function Home() {
       toast({
         title: t('common.error'),
         description: `${t('filaments.deleteError')} ${error.message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Archive a filament
+  const archiveFilamentMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason?: string }) => {
+      const response = await fetch(`/api/filaments/${id}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: reason || 'manual' }),
+      });
+      if (!response.ok) throw new Error('Failed to archive filament');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/filaments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/statistics'] });
+      toast({
+        title: t('common.success'),
+        description: t('filaments.archiveSuccess'),
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: t('common.error'),
+        description: t('filaments.archiveError'),
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Unarchive a filament
+  const unarchiveFilamentMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/filaments/${id}/unarchive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to unarchive filament');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/filaments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/statistics'] });
+      toast({
+        title: t('common.success'),
+        description: t('filaments.unarchiveSuccess'),
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: t('common.error'),
+        description: t('filaments.archiveError'),
         variant: "destructive",
       });
     },
@@ -349,6 +418,27 @@ export default function Home() {
     setShowAddModal(true);
   };
 
+  // Open weight update modal
+  const handleWeightUpdate = (filament: Filament) => {
+    setWeightFilament(filament);
+    setShowWeightModal(true);
+  };
+
+  // Archive a filament
+  const handleArchiveFilament = (filament: Filament) => {
+    archiveFilamentMutation.mutate({ id: filament.id, reason: 'manual' });
+  };
+
+  // Unarchive a filament
+  const handleUnarchiveFilament = (filament: Filament) => {
+    unarchiveFilamentMutation.mutate(filament.id);
+  };
+
+  // Toggle show archived filter
+  const handleShowArchivedChange = useCallback((show: boolean) => {
+    setShowArchived(show);
+  }, []);
+
   // Batch operation handlers
   const handleToggleSelectionMode = () => {
     setSelectionMode(prev => !prev);
@@ -480,6 +570,10 @@ export default function Home() {
     setSelectedColors(colors);
   }, []);
 
+  const handleStorageLocationChange = useCallback((locations: string[]) => {
+    setSelectedStorageLocations(locations);
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header with Add Filament button */}
@@ -503,6 +597,9 @@ export default function Home() {
               onMinRemaining={handleMinRemainingChange}
               onManufacturerChange={handleManufacturerChange}
               onColorChange={handleColorChange}
+              onStorageLocationChange={handleStorageLocationChange}
+              onShowArchivedChange={handleShowArchivedChange}
+              showArchived={showArchived}
               filaments={filaments}
             />
           </aside>
@@ -532,6 +629,9 @@ export default function Home() {
                   onEditFilament={handleEditFilament}
                   onDeleteFilament={handleDeleteFilament}
                   onCopyFilament={handleCopyFilament}
+                  onWeightUpdate={handleWeightUpdate}
+                  onArchive={handleArchiveFilament}
+                  onUnarchive={handleUnarchiveFilament}
                   selectable={selectionMode}
                   selectedFilaments={selectedFilaments}
                   onSelectFilament={handleSelectFilament}
@@ -582,6 +682,16 @@ export default function Home() {
         }}
         onConfirm={handleConfirmDelete}
         filament={selectedFilament}
+      />
+
+      {/* Weight Update Modal */}
+      <WeightModal
+        filament={weightFilament}
+        open={showWeightModal}
+        onClose={() => {
+          setShowWeightModal(false);
+          setWeightFilament(null);
+        }}
       />
     </div>
   );

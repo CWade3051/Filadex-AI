@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Filament } from "@shared/schema";
 import { FilamentSpool } from "@/components/ui/filament-spool";
 import { Card } from "@/components/ui/card";
-import { Copy, CheckCircle2, ImageIcon, X, Check } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Copy, CheckCircle2, ImageIcon, X, Check, Scale, Archive, ArchiveRestore, MapPin } from "lucide-react";
 import { useTranslation } from "@/i18n";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -21,6 +22,9 @@ interface FilamentCardProps {
   onEdit: (filament: Filament) => void;
   onDelete: (filament: Filament) => void;
   onCopy?: (filament: Filament) => void;
+  onWeightUpdate?: (filament: Filament) => void;
+  onArchive?: (filament: Filament) => void;
+  onUnarchive?: (filament: Filament) => void;
   readOnly?: boolean;
   selectable?: boolean;
   selected?: boolean;
@@ -32,6 +36,9 @@ export function FilamentCard({
   onEdit,
   onDelete,
   onCopy,
+  onWeightUpdate,
+  onArchive,
+  onUnarchive,
   readOnly = false,
   selectable = false,
   selected = false,
@@ -41,6 +48,8 @@ export function FilamentCard({
   const { toast } = useToast();
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [copied, setCopied] = useState(false);
+  
+  const isArchived = filament.isArchived;
 
   // Copy filament info to clipboard
   const handleCopyToClipboard = async (e: React.MouseEvent) => {
@@ -99,7 +108,7 @@ export function FilamentCard({
   return (
     <TooltipProvider delayDuration={300}>
       <Card
-        className={`filament-card card-hover dark:bg-neutral-800 bg-white ${selectable ? 'cursor-pointer' : ''} ${selected ? 'ring-2 ring-primary' : ''}`}
+        className={`filament-card card-hover dark:bg-neutral-800 bg-white ${selectable ? 'cursor-pointer' : ''} ${selected ? 'ring-2 ring-primary' : ''} ${isArchived ? 'opacity-60' : ''}`}
         onClick={selectable ? handleCardClick : undefined}
       >
         <div className="p-4 border-b dark:border-neutral-700 border-gray-200">
@@ -126,31 +135,76 @@ export function FilamentCard({
                   />
                 </button>
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <h3
-                    className="font-medium text-lg dark:text-white text-gray-800 truncate min-w-0 cursor-pointer hover:text-primary transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit(filament);
-                    }}
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <h3
+                      className="font-medium text-lg dark:text-white text-gray-800 truncate min-w-0 cursor-pointer hover:text-primary transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit(filament);
+                      }}
+                    >
+                      {displayName}
+                    </h3>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="max-w-[90vw] sm:max-w-xs break-words dark:bg-neutral-700 dark:text-neutral-200 bg-gray-800 text-white border-gray-600 text-sm p-2 z-[9999]"
+                    sideOffset={5}
+                    avoidCollisions={true}
                   >
-                    {displayName}
-                  </h3>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="top"
-                  className="max-w-[90vw] sm:max-w-xs break-words dark:bg-neutral-700 dark:text-neutral-200 bg-gray-800 text-white border-gray-600 text-sm p-2 z-[9999]"
-                  sideOffset={5}
-                  avoidCollisions={true}
-                >
-                  <p className="whitespace-normal">{fullName}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Click to view details</p>
-                </TooltipContent>
-              </Tooltip>
+                    <p className="whitespace-normal">{fullName}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Click to view details</p>
+                  </TooltipContent>
+                </Tooltip>
+                {isArchived && (
+                  <Badge variant="secondary" className="text-xs flex-shrink-0">
+                    <Archive className="h-3 w-3 mr-1" />
+                    {t('filaments.archived')}
+                  </Badge>
+                )}
+              </div>
             </div>
           {!readOnly && (
-            <div className="flex space-x-2 flex-shrink-0 sm:self-start">
+            <div className="flex space-x-1 flex-shrink-0 sm:self-start">
+              {/* Weight update button */}
+              {onWeightUpdate && (
+                <button
+                  className="dark:text-neutral-400 text-gray-500 hover:text-blue-500 p-1 rounded-full hover:bg-blue-500/10 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onWeightUpdate(filament);
+                  }}
+                  title={t('filaments.updateWeight')}
+                >
+                  <Scale size={16} />
+                </button>
+              )}
+              {/* Archive/Unarchive button */}
+              {isArchived && onUnarchive ? (
+                <button
+                  className="dark:text-neutral-400 text-gray-500 hover:text-green-500 p-1 rounded-full hover:bg-green-500/10 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUnarchive(filament);
+                  }}
+                  title={t('filaments.unarchive')}
+                >
+                  <ArchiveRestore size={16} />
+                </button>
+              ) : onArchive && !isArchived ? (
+                <button
+                  className="dark:text-neutral-400 text-gray-500 hover:text-amber-500 p-1 rounded-full hover:bg-amber-500/10 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onArchive(filament);
+                  }}
+                  title={t('filaments.archive')}
+                >
+                  <Archive size={16} />
+                </button>
+              ) : null}
               <button
                 className="dark:text-neutral-400 text-gray-500 hover:text-secondary p-1 rounded-full hover:bg-secondary/10 transition-colors"
                 onClick={handleCopyToClipboard}
@@ -372,6 +426,39 @@ export function FilamentCard({
               </Tooltip>
             ) : (
               <span className="font-medium dark:text-neutral-300 text-gray-700">-</span>
+            )}
+          </div>
+        </div>
+
+        {/* Storage Location - Full width row */}
+        <div className="mt-3 text-sm dark:bg-neutral-900 bg-gray-100 p-3 rounded-lg">
+          <div className="flex items-center gap-2">
+            <MapPin size={14} className="dark:text-neutral-400 text-gray-500 flex-shrink-0" />
+            <span className="dark:text-neutral-400 text-gray-500 text-xs">Storage Location:</span>
+            {filament.storageLocation ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="font-medium dark:text-neutral-300 text-gray-700 cursor-help">
+                    {filament.storageLocation}
+                    {filament.locationDetails && (
+                      <span className="text-muted-foreground ml-1">({filament.locationDetails})</span>
+                    )}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  className="max-w-[90vw] sm:max-w-xs break-words dark:bg-neutral-700 dark:text-neutral-200 bg-gray-800 text-white border-gray-600 text-sm p-2 z-[9999]"
+                  sideOffset={5}
+                  avoidCollisions={true}
+                >
+                  <p className="whitespace-normal font-medium">{filament.storageLocation}</p>
+                  {filament.locationDetails && (
+                    <p className="text-xs text-neutral-400 mt-1">{filament.locationDetails}</p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <span className="dark:text-neutral-500 text-gray-400 italic">Not set</span>
             )}
           </div>
         </div>

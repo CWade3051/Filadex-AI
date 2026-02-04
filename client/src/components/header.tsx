@@ -17,6 +17,9 @@ import {
   Gauge,
   Camera,
   Key,
+  Printer,
+  Grid3X3,
+  Cloud,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,6 +37,10 @@ import { UserManagementModal } from "./user-management-modal";
 import { SharingModal } from "./sharing-modal";
 import { ChangePasswordModal } from "./change-password-modal";
 import { PhotoImportModal } from "./photo-import-modal";
+import { PrintJobModal } from "./print-job-modal";
+import { MaterialCompatibilityMatrix } from "./material-compatibility";
+import { SlicerProfiles } from "./slicer-profiles";
+import { CloudBackup } from "./cloud-backup";
 import { Link, useLocation } from "wouter";
 import { Logo } from "./logo";
 import { useAuth } from "@/lib/auth";
@@ -65,6 +72,10 @@ export function Header({
   const [sharingModalOpen, setSharingModalOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [photoImportOpen, setPhotoImportOpen] = useState(false);
+  const [printJobModalOpen, setPrintJobModalOpen] = useState(false);
+  const [compatibilityMatrixOpen, setCompatibilityMatrixOpen] = useState(false);
+  const [slicerProfilesOpen, setSlicerProfilesOpen] = useState(false);
+  const [cloudBackupOpen, setCloudBackupOpen] = useState(false);
   const { isAdmin, logout } = useAuth();
   const [_, navigate] = useLocation();
   const { t } = useTranslation();
@@ -164,6 +175,22 @@ export function Header({
                 <Camera className="mr-2 h-4 w-4" />
                 {t('ai.photoImport')}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPrintJobModalOpen(true)}>
+                <Printer className="mr-2 h-4 w-4" />
+                {t('printJobs.logPrint')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCompatibilityMatrixOpen(true)}>
+                <Grid3X3 className="mr-2 h-4 w-4" />
+                Material Compatibility
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSlicerProfilesOpen(true)}>
+                <Settings className="mr-2 h-4 w-4" />
+                Slicer Profiles
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCloudBackupOpen(true)}>
+                <Cloud className="mr-2 h-4 w-4" />
+                Cloud Backup
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSharingModalOpen(true)}>
                 <Share2 className="mr-2 h-4 w-4" />
                 {t('filaments.sharedCollection')}
@@ -258,6 +285,26 @@ export function Header({
           // Trigger refresh of filaments list
           window.location.reload();
         }}
+      />
+
+      <PrintJobModal
+        open={printJobModalOpen}
+        onClose={() => setPrintJobModalOpen(false)}
+      />
+
+      <MaterialCompatibilityMatrix
+        open={compatibilityMatrixOpen}
+        onOpenChange={setCompatibilityMatrixOpen}
+      />
+
+      <SlicerProfiles
+        open={slicerProfilesOpen}
+        onOpenChange={setSlicerProfilesOpen}
+      />
+
+      <CloudBackup
+        open={cloudBackupOpen}
+        onOpenChange={setCloudBackupOpen}
       />
     </header>
   );

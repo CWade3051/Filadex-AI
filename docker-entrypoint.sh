@@ -155,10 +155,106 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
     is_public BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
   );
+
+  -- Phase 2: Print Job Logging
+  CREATE TABLE IF NOT EXISTS public.print_jobs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    filament_usages TEXT,
+    print_started_at TIMESTAMP WITH TIME ZONE,
+    print_completed_at TIMESTAMP WITH TIME ZONE,
+    estimated_duration INTEGER,
+    actual_duration INTEGER,
+    estimated_weight NUMERIC,
+    actual_weight NUMERIC,
+    status TEXT DEFAULT 'completed',
+    failure_reason TEXT,
+    gcode_filename TEXT,
+    slicer_used TEXT,
+    printer_used TEXT,
+    thumbnail_url TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- Phase 2: Filament Usage History
+  CREATE TABLE IF NOT EXISTS public.filament_history (
+    id SERIAL PRIMARY KEY,
+    filament_id INTEGER REFERENCES public.filaments(id) ON DELETE CASCADE,
+    remaining_percentage NUMERIC,
+    current_weight NUMERIC,
+    change_type TEXT,
+    change_amount NUMERIC,
+    print_job_id INTEGER REFERENCES public.print_jobs(id) ON DELETE SET NULL,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- Phase 3: Material Compatibility Matrix
+  CREATE TABLE IF NOT EXISTS public.material_compatibility (
+    id SERIAL PRIMARY KEY,
+    material1 TEXT NOT NULL,
+    material2 TEXT NOT NULL,
+    compatibility_level TEXT NOT NULL,
+    notes TEXT,
+    interface_strength TEXT,
+    recommended_settings TEXT,
+    source TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- Phase 3: Slicer Profiles
+  CREATE TABLE IF NOT EXISTS public.slicer_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    manufacturer TEXT,
+    material TEXT,
+    file_url TEXT,
+    original_filename TEXT,
+    file_type TEXT,
+    parsed_settings TEXT,
+    slicer_version TEXT,
+    printer_model TEXT,
+    notes TEXT,
+    is_public BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- Phase 3: Cloud Backup Configuration
+  CREATE TABLE IF NOT EXISTS public.cloud_backup_configs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expires_at TIMESTAMP WITH TIME ZONE,
+    is_enabled BOOLEAN DEFAULT FALSE,
+    backup_frequency TEXT,
+    last_backup_at TIMESTAMP WITH TIME ZONE,
+    folder_path TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- Phase 3: Backup History
+  CREATE TABLE IF NOT EXISTS public.backup_history (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+    provider TEXT,
+    status TEXT,
+    file_size INTEGER,
+    cloud_file_id TEXT,
+    error_message TEXT,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE
+  );
 "
 
 # Check if the tables were created
-for TABLE in users manufacturers materials colors diameters storage_locations filaments user_sharing; do
+for TABLE in users manufacturers materials colors diameters storage_locations filaments user_sharing print_jobs filament_history material_compatibility slicer_profiles cloud_backup_configs backup_history; do
   EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$TABLE')")
   echo "Table $TABLE created: $EXISTS"
 done
@@ -255,6 +351,44 @@ STORAGE_CAP_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSE
 if [ "$STORAGE_CAP_EXISTS" = "f" ]; then
   PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.storage_locations ADD COLUMN capacity INTEGER;"
   echo "storage_locations.capacity column added."
+fi
+
+# Phase 1: Weight tracking columns
+EMPTY_SPOOL_WEIGHT_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'empty_spool_weight')")
+if [ "$EMPTY_SPOOL_WEIGHT_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN empty_spool_weight NUMERIC;"
+  echo "empty_spool_weight column added."
+fi
+
+CURRENT_WEIGHT_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'current_weight')")
+if [ "$CURRENT_WEIGHT_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN current_weight NUMERIC;"
+  echo "current_weight column added."
+fi
+
+LAST_WEIGHED_AT_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'last_weighed_at')")
+if [ "$LAST_WEIGHED_AT_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN last_weighed_at TIMESTAMP WITH TIME ZONE;"
+  echo "last_weighed_at column added."
+fi
+
+# Phase 1: Archive columns
+IS_ARCHIVED_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'is_archived')")
+if [ "$IS_ARCHIVED_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN is_archived BOOLEAN DEFAULT FALSE;"
+  echo "is_archived column added."
+fi
+
+ARCHIVED_AT_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'archived_at')")
+if [ "$ARCHIVED_AT_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN archived_at TIMESTAMP WITH TIME ZONE;"
+  echo "archived_at column added."
+fi
+
+ARCHIVE_REASON_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'archive_reason')")
+if [ "$ARCHIVE_REASON_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN archive_reason TEXT;"
+  echo "archive_reason column added."
 fi
 
 echo "All column migrations completed."

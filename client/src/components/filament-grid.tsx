@@ -12,6 +12,9 @@ interface FilamentGridProps {
   onEditFilament: (filament: Filament) => void;
   onDeleteFilament: (filament: Filament) => void;
   onCopyFilament?: (filament: Filament) => void;
+  onWeightUpdate?: (filament: Filament) => void;
+  onArchive?: (filament: Filament) => void;
+  onUnarchive?: (filament: Filament) => void;
   selectable?: boolean;
   selectedFilaments?: Filament[];
   onSelectFilament?: (filament: Filament) => void;
@@ -27,6 +30,9 @@ export function FilamentGrid({
   onEditFilament,
   onDeleteFilament,
   onCopyFilament,
+  onWeightUpdate,
+  onArchive,
+  onUnarchive,
   selectable = false,
   selectedFilaments = [],
   onSelectFilament,
@@ -137,6 +143,9 @@ export function FilamentGrid({
               onEdit={onEditFilament}
               onDelete={onDeleteFilament}
               onCopy={onCopyFilament}
+              onWeightUpdate={onWeightUpdate}
+              onArchive={onArchive}
+              onUnarchive={onUnarchive}
               selectable={selectable}
               selected={selectedFilaments.some(f => f.id === filament.id)}
               onSelect={onSelectFilament}

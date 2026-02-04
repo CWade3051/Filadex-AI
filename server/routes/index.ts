@@ -12,6 +12,10 @@ import { registerPublicRoutes } from "./public";
 import { registerStatisticsRoutes } from "./statistics";
 import { registerThemeRoutes } from "./theme";
 import { registerAIRoutes } from "./ai";
+import { registerPrintJobRoutes } from "./print-jobs";
+import { registerCompatibilityRoutes } from "./compatibility";
+import { registerSlicerProfileRoutes } from "./slicer-profiles";
+import { registerCloudBackupRoutes } from "./cloud-backup";
 // All routes have been extracted - routes.ts is now empty or contains only legacy code
 // Keeping registerRemainingRoutes import for backward compatibility
 import { registerRemainingRoutes } from "../routes";
@@ -41,6 +45,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerStatisticsRoutes(app);
   registerThemeRoutes(app);
   registerAIRoutes(app);
+  registerPrintJobRoutes(app);
+  registerCompatibilityRoutes(app);
+  registerSlicerProfileRoutes(app);
+  registerCloudBackupRoutes(app);
 
   // Register any remaining routes from routes.ts (should be empty now)
   registerRemainingRoutes(app);

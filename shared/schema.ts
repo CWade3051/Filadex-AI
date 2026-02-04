@@ -42,6 +42,14 @@ export const filaments = pgTable("filaments", {
   locationDetails: text("location_details"), // Sub-location details (e.g., "Top, Row 2, Slot 3")
   imageUrl: text("image_url"), // URL/path to spool image
   notes: text("notes"), // User notes about the filament
+  // Weight tracking fields (Phase 1.1)
+  emptySpoolWeight: numeric("empty_spool_weight"), // Weight of empty spool in grams (typically 200-250g)
+  currentWeight: numeric("current_weight"), // Current weight of spool in grams (last weighed)
+  lastWeighedAt: timestamp("last_weighed_at"), // When the spool was last weighed
+  // Archive fields (Phase 1.2)
+  isArchived: boolean("is_archived").default(false), // Whether spool is archived
+  archivedAt: timestamp("archived_at"), // When spool was archived
+  archiveReason: text("archive_reason"), // Reason for archiving: 'empty', 'damaged', 'manual'
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -225,3 +233,189 @@ export const insertPendingUploadSchema = createInsertSchema(pendingUploads).omit
 
 export type InsertPendingUpload = z.infer<typeof insertPendingUploadSchema>;
 export type PendingUpload = typeof pendingUploads.$inferSelect;
+
+// Phase 2: Print job logging
+export const printJobs = pgTable("print_jobs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  
+  // Print identification
+  name: text("name").notNull(),
+  description: text("description"),
+  
+  // Filament usage - stored as JSON array: [{filamentId, gramsUsed, metersUsed}]
+  filamentUsages: text("filament_usages"), // JSON string
+  
+  // Time tracking
+  printStartedAt: timestamp("print_started_at"),
+  printCompletedAt: timestamp("print_completed_at"),
+  estimatedDuration: integer("estimated_duration"), // minutes
+  actualDuration: integer("actual_duration"), // minutes
+  
+  // Weight estimates vs actuals
+  estimatedWeight: numeric("estimated_weight"), // grams (from slicer/gcode)
+  actualWeight: numeric("actual_weight"), // grams (if weighed)
+  
+  // Status
+  status: text("status").default("completed"), // completed, failed, cancelled
+  failureReason: text("failure_reason"),
+  
+  // Source info
+  gcodeFilename: text("gcode_filename"),
+  slicerUsed: text("slicer_used"), // OrcaSlicer, BambuStudio, PrusaSlicer, Cura
+  printerUsed: text("printer_used"),
+  
+  // Metadata
+  thumbnailUrl: text("thumbnail_url"), // G-code thumbnail if extracted
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPrintJobSchema = createInsertSchema(printJobs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPrintJob = z.infer<typeof insertPrintJobSchema>;
+export type PrintJob = typeof printJobs.$inferSelect;
+
+// Filament usage history for tracking consumption over time
+export const filamentHistory = pgTable("filament_history", {
+  id: serial("id").primaryKey(),
+  filamentId: integer("filament_id").references(() => filaments.id, { onDelete: "cascade" }),
+  
+  // Snapshot data at this point in time
+  remainingPercentage: numeric("remaining_percentage"),
+  currentWeight: numeric("current_weight"),
+  
+  // Change info
+  changeType: text("change_type"), // 'print', 'adjustment', 'weigh', 'import'
+  changeAmount: numeric("change_amount"), // grams (negative = used, positive = added)
+  printJobId: integer("print_job_id").references(() => printJobs.id, { onDelete: "set null" }),
+  
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertFilamentHistorySchema = createInsertSchema(filamentHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertFilamentHistory = z.infer<typeof insertFilamentHistorySchema>;
+export type FilamentHistory = typeof filamentHistory.$inferSelect;
+
+// Phase 3: Material Compatibility Matrix
+export const materialCompatibility = pgTable("material_compatibility", {
+  id: serial("id").primaryKey(),
+  material1: text("material1").notNull(),
+  material2: text("material2").notNull(),
+  
+  // Compatibility level: excellent, good, poor, incompatible
+  compatibilityLevel: text("compatibility_level").notNull(),
+  
+  // Details
+  notes: text("notes"),
+  interfaceStrength: text("interface_strength"), // strong, medium, weak
+  recommendedSettings: text("recommended_settings"), // JSON string for custom settings
+  
+  // Source of information
+  source: text("source"), // bambulab, prusa, user, etc.
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertMaterialCompatibilitySchema = createInsertSchema(materialCompatibility).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertMaterialCompatibility = z.infer<typeof insertMaterialCompatibilitySchema>;
+export type MaterialCompatibility = typeof materialCompatibility.$inferSelect;
+
+// Phase 3: Slicer Profiles
+export const slicerProfiles = pgTable("slicer_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  
+  // Profile identification
+  name: text("name").notNull(),
+  manufacturer: text("manufacturer"),
+  material: text("material"),
+  
+  // File storage
+  fileUrl: text("file_url"),
+  originalFilename: text("original_filename"),
+  fileType: text("file_type"), // orcaslicer, bambu, prusaslicer, cura
+  
+  // Parsed settings (JSON string)
+  parsedSettings: text("parsed_settings"),
+  
+  // Metadata
+  slicerVersion: text("slicer_version"),
+  printerModel: text("printer_model"),
+  notes: text("notes"),
+  isPublic: boolean("is_public").default(false),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSlicerProfileSchema = createInsertSchema(slicerProfiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSlicerProfile = z.infer<typeof insertSlicerProfileSchema>;
+export type SlicerProfile = typeof slicerProfiles.$inferSelect;
+
+// Phase 3: Cloud Backup Configuration
+export const cloudBackupConfigs = pgTable("cloud_backup_configs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  
+  provider: text("provider").notNull(), // google_drive, dropbox, onedrive
+  accessToken: text("access_token"), // encrypted
+  refreshToken: text("refresh_token"), // encrypted
+  tokenExpiresAt: timestamp("token_expires_at"),
+  
+  // Settings
+  isEnabled: boolean("is_enabled").default(false),
+  backupFrequency: text("backup_frequency"), // daily, weekly, manual
+  lastBackupAt: timestamp("last_backup_at"),
+  folderPath: text("folder_path"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCloudBackupConfigSchema = createInsertSchema(cloudBackupConfigs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCloudBackupConfig = z.infer<typeof insertCloudBackupConfigSchema>;
+export type CloudBackupConfig = typeof cloudBackupConfigs.$inferSelect;
+
+// Backup History
+export const backupHistory = pgTable("backup_history", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  
+  provider: text("provider"),
+  status: text("status"), // success, failed, in_progress
+  fileSize: integer("file_size"), // bytes
+  cloudFileId: text("cloud_file_id"),
+  errorMessage: text("error_message"),
+  
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertBackupHistorySchema = createInsertSchema(backupHistory).omit({
+  id: true,
+});
+
+export type InsertBackupHistory = z.infer<typeof insertBackupHistorySchema>;
+export type BackupHistory = typeof backupHistory.$inferSelect;
