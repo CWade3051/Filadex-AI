@@ -11,7 +11,7 @@ echo "🚀 Starting Filadex Local Development Environment..."
 # Start dev database if not running
 if ! docker ps --format '{{.Names}}' | grep -q 'filadex-db-dev'; then
     echo "📦 Starting development database..."
-    docker compose -f docker-compose.dev.yml up -d
+    docker compose -p filadex-dev -f docker-compose.dev.yml up -d
     echo "⏳ Waiting for database to be ready..."
     sleep 3
 else

@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 echo "🛑 Stopping Filadex Production Docker Environment..."
 
-docker compose stop
+docker compose -p filadex-prod stop
 
 echo ""
 echo "✅ Production Docker containers stopped"

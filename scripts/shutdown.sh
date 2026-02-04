@@ -19,7 +19,7 @@ fi
 # Stop dev database container
 if docker ps --format '{{.Names}}' | grep -q 'filadex-db-dev'; then
     echo "📦 Stopping development database..."
-    docker compose -f docker-compose.dev.yml stop
+    docker compose -p filadex-dev -f docker-compose.dev.yml stop
     echo "✅ Development database stopped"
 else
     echo "ℹ️  Development database not running"

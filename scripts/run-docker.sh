@@ -10,11 +10,11 @@ echo "🚀 Starting Filadex Production Docker Environment..."
 
 # Pull latest image
 echo "📦 Pulling latest Docker image..."
-docker compose pull
+docker compose -p filadex-prod pull
 
 # Start containers
 echo "🐳 Starting Docker containers..."
-docker compose up -d
+docker compose -p filadex-prod up -d
 
 echo ""
 echo "=========================================="
@@ -26,4 +26,4 @@ echo "=========================================="
 echo ""
 
 # Show container status
-docker compose ps
+docker compose -p filadex-prod ps
