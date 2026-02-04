@@ -323,6 +323,7 @@ export function Header({
       <FactoryResetModal
         isOpen={factoryResetOpen}
         onClose={() => setFactoryResetOpen(false)}
+        onOpenCloudBackup={() => setCloudBackupOpen(true)}
       />
     </header>
   );

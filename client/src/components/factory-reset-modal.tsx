@@ -13,13 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, AlertTriangle, Database, Image, FileText, Users, Trash2 } from "lucide-react";
+import { Loader2, AlertTriangle, Database, Image, FileText, Users, Trash2, Cloud, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 
 interface FactoryResetModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenCloudBackup: () => void;
 }
 
 interface SystemInfo {
@@ -38,7 +39,7 @@ interface SystemInfo {
   };
 }
 
-export function FactoryResetModal({ isOpen, onClose }: FactoryResetModalProps) {
+export function FactoryResetModal({ isOpen, onClose, onOpenCloudBackup }: FactoryResetModalProps) {
   const [confirmation, setConfirmation] = useState("");
   const [step, setStep] = useState<"warning" | "confirm">("warning");
   const { logout } = useAuth();
@@ -132,6 +133,31 @@ export function FactoryResetModal({ isOpen, onClose }: FactoryResetModalProps) {
                 Make sure you have a backup before proceeding.
               </AlertDescription>
             </Alert>
+
+            {/* Backup Suggestion */}
+            <div className="p-3 rounded-lg border border-blue-500/30 bg-blue-500/10">
+              <div className="flex items-start gap-3">
+                <Download className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <p className="text-sm font-medium">Create a backup first!</p>
+                  <p className="text-xs text-muted-foreground">
+                    Before resetting, download a local backup so you can restore your data if needed.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-500/50 hover:bg-blue-500/20"
+                    onClick={() => {
+                      onClose();
+                      onOpenCloudBackup();
+                    }}
+                  >
+                    <Cloud className="mr-2 h-4 w-4" />
+                    Go to Cloud Backup
+                  </Button>
+                </div>
+              </div>
+            </div>
 
             <div className="space-y-3">
               <h4 className="font-medium text-sm">The following will be deleted:</h4>
