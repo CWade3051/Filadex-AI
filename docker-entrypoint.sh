@@ -76,6 +76,8 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
     language TEXT DEFAULT 'en',
     currency TEXT DEFAULT 'EUR',
     temperature_unit TEXT DEFAULT 'C',
+    openai_api_key TEXT,
+    openai_model TEXT DEFAULT 'gpt-4o',
     last_login TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
   );
@@ -112,6 +114,8 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
   CREATE TABLE IF NOT EXISTS public.storage_locations (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    capacity INTEGER,
     sort_order INTEGER DEFAULT 999,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
   );
@@ -125,6 +129,8 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
     color_code TEXT,
     diameter NUMERIC,
     print_temp TEXT,
+    bed_temp TEXT,
+    print_speed TEXT,
     total_weight NUMERIC NOT NULL,
     remaining_percentage NUMERIC NOT NULL,
     purchase_date DATE,
@@ -134,6 +140,9 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
     dryer_count INTEGER DEFAULT 0 NOT NULL,
     last_drying_date DATE,
     storage_location TEXT,
+    location_details TEXT,
+    notes TEXT,
+    image_url TEXT,
     user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -185,6 +194,70 @@ if [ "$TEMPERATURE_COLUMN_EXISTS" = "f" ]; then
 else
   echo "Temperature unit column already exists."
 fi
+
+# Add openai_api_key column if it doesn't exist
+OPENAI_KEY_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'openai_api_key')")
+if [ "$OPENAI_KEY_EXISTS" = "f" ]; then
+  echo "Adding openai_api_key column to users table..."
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.users ADD COLUMN openai_api_key TEXT;"
+  echo "OpenAI API key column added."
+fi
+
+# Add openai_model column if it doesn't exist
+OPENAI_MODEL_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'openai_model')")
+if [ "$OPENAI_MODEL_EXISTS" = "f" ]; then
+  echo "Adding openai_model column to users table..."
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.users ADD COLUMN openai_model TEXT DEFAULT 'gpt-4o';"
+  echo "OpenAI model column added."
+fi
+
+# Add filament columns if they don't exist
+echo "Checking filament table columns..."
+
+PRINT_SPEED_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'print_speed')")
+if [ "$PRINT_SPEED_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN print_speed TEXT;"
+  echo "print_speed column added."
+fi
+
+BED_TEMP_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'bed_temp')")
+if [ "$BED_TEMP_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN bed_temp TEXT;"
+  echo "bed_temp column added."
+fi
+
+NOTES_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'notes')")
+if [ "$NOTES_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN notes TEXT;"
+  echo "notes column added."
+fi
+
+IMAGE_URL_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'image_url')")
+if [ "$IMAGE_URL_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN image_url TEXT;"
+  echo "image_url column added."
+fi
+
+LOCATION_DETAILS_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'filaments' AND column_name = 'location_details')")
+if [ "$LOCATION_DETAILS_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN location_details TEXT;"
+  echo "location_details column added."
+fi
+
+# Add storage_locations columns if they don't exist
+STORAGE_DESC_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'storage_locations' AND column_name = 'description')")
+if [ "$STORAGE_DESC_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.storage_locations ADD COLUMN description TEXT;"
+  echo "storage_locations.description column added."
+fi
+
+STORAGE_CAP_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'storage_locations' AND column_name = 'capacity')")
+if [ "$STORAGE_CAP_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.storage_locations ADD COLUMN capacity INTEGER;"
+  echo "storage_locations.capacity column added."
+fi
+
+echo "All column migrations completed."
 
 # Insert sample data, but only if explicitly requested via INIT_SAMPLE_DATA environment variable
 echo "Checking for existing data..."
