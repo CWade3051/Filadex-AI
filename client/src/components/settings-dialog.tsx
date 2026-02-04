@@ -8,6 +8,8 @@ import {
   ColorsList,
   DiametersList,
   StorageLocationsList,
+  PrintersList,
+  SlicersList,
   UnitsSettings,
   SettingsApiKey
 } from "./settings";
@@ -163,6 +165,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
                 <TabsTrigger value="colors" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.colors.title')}</TabsTrigger>
                 <TabsTrigger value="diameters" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.diameters.title')}</TabsTrigger>
                 <TabsTrigger value="storage-locations" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.storageLocations.title')}</TabsTrigger>
+                <TabsTrigger value="printers" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.printers.title')}</TabsTrigger>
+                <TabsTrigger value="slicers" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.slicers.title')}</TabsTrigger>
                 <TabsTrigger value="units" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.units.title')}</TabsTrigger>
                 <TabsTrigger value="ai" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('apiKey.title')}</TabsTrigger>
                 <TabsTrigger value="filament-import-export" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.filamentImportExport.title')}</TabsTrigger>
@@ -194,6 +198,14 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
 
           <TabsContent value="storage-locations">
             <StorageLocationsList />
+          </TabsContent>
+
+          <TabsContent value="printers">
+            <PrintersList />
+          </TabsContent>
+
+          <TabsContent value="slicers">
+            <SlicersList />
           </TabsContent>
 
           <TabsContent value="units">

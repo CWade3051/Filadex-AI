@@ -61,6 +61,16 @@ export function PrintJobModal({ open, onClose, printJob }: PrintJobModalProps) {
     queryKey: ["/api/filaments"],
   });
 
+  // Fetch printers for selection
+  const { data: printersList = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/printers"],
+  });
+
+  // Fetch slicers for selection
+  const { data: slicersList = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/slicers"],
+  });
+
   // Reset form when modal opens/closes or printJob changes
   useEffect(() => {
     if (open) {
@@ -277,21 +287,50 @@ export function PrintJobModal({ open, onClose, printJob }: PrintJobModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="printer">{t("printJobs.printer")}</Label>
-              <Input
-                id="printer"
-                value={printerUsed}
-                onChange={(e) => setPrinterUsed(e.target.value)}
-                placeholder={t("printJobs.printerPlaceholder")}
-              />
+              <Select
+                value={printerUsed || ""}
+                onValueChange={(val) => setPrinterUsed(val === "__custom__" ? "" : val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("printJobs.printerPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {printersList.map((printer) => (
+                    <SelectItem key={printer.id} value={printer.name}>
+                      {printer.name}
+                    </SelectItem>
+                  ))}
+                  {printerUsed && !printersList.find(p => p.name === printerUsed) && (
+                    <SelectItem value={printerUsed}>{printerUsed}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {printersList.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Add printers in Settings → List Management
+                </p>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="slicer">{t("printJobs.slicer")}</Label>
-              <Input
-                id="slicer"
-                value={slicerUsed}
-                onChange={(e) => setSlicerUsed(e.target.value)}
-                placeholder={t("printJobs.slicerPlaceholder")}
-              />
+              <Select
+                value={slicerUsed || ""}
+                onValueChange={(val) => setSlicerUsed(val === "__custom__" ? "" : val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("printJobs.slicerPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {slicersList.map((slicer) => (
+                    <SelectItem key={slicer.id} value={slicer.name}>
+                      {slicer.name}
+                    </SelectItem>
+                  ))}
+                  {slicerUsed && !slicersList.find(s => s.name === slicerUsed) && (
+                    <SelectItem value={slicerUsed}>{slicerUsed}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

@@ -39,6 +39,7 @@ import { SharingModal } from "./sharing-modal";
 import { ChangePasswordModal } from "./change-password-modal";
 import { PhotoImportModal } from "./photo-import-modal";
 import { PrintJobModal } from "./print-job-modal";
+import { PrintJobsList } from "./print-jobs-list";
 import { MaterialCompatibilityMatrix } from "./material-compatibility";
 import { SlicerProfiles } from "./slicer-profiles";
 import { CloudBackup } from "./cloud-backup";
@@ -75,6 +76,7 @@ export function Header({
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [photoImportOpen, setPhotoImportOpen] = useState(false);
   const [printJobModalOpen, setPrintJobModalOpen] = useState(false);
+  const [printJobsListOpen, setPrintJobsListOpen] = useState(false);
   const [compatibilityMatrixOpen, setCompatibilityMatrixOpen] = useState(false);
   const [slicerProfilesOpen, setSlicerProfilesOpen] = useState(false);
   const [cloudBackupOpen, setCloudBackupOpen] = useState(false);
@@ -181,6 +183,10 @@ export function Header({
               <DropdownMenuItem onClick={() => setPrintJobModalOpen(true)}>
                 <Printer className="mr-2 h-4 w-4" />
                 {t('printJobs.logPrint')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPrintJobsListOpen(true)}>
+                <List className="mr-2 h-4 w-4" />
+                {t('printJobs.printHistory')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setCompatibilityMatrixOpen(true)}>
                 <Grid3X3 className="mr-2 h-4 w-4" />
@@ -303,6 +309,11 @@ export function Header({
       <PrintJobModal
         open={printJobModalOpen}
         onClose={() => setPrintJobModalOpen(false)}
+      />
+
+      <PrintJobsList
+        open={printJobsListOpen}
+        onClose={() => setPrintJobsListOpen(false)}
       />
 
       <MaterialCompatibilityMatrix
