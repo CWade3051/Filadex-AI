@@ -66,6 +66,7 @@ interface Color {
 interface FilterSidebarProps {
   onSearchChange: (search: string) => void;
   onMaterialChange: (materials: string[]) => void;
+  onMaxRemaining: (value: number) => void;
   onMinRemaining: (value: number) => void;
   onManufacturerChange: (manufacturers: string[]) => void;
   onColorChange: (colors: string[]) => void;
@@ -75,6 +76,7 @@ interface FilterSidebarProps {
 export function FilterSidebar({
   onSearchChange,
   onMaterialChange,
+  onMaxRemaining,
   onMinRemaining,
   onManufacturerChange,
   onColorChange,
@@ -85,7 +87,8 @@ export function FilterSidebar({
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [selectedManufacturers, setSelectedManufacturers] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  const [minRemaining, setMinRemaining] = useState(0);
+  const [maxRemaining, setMaxRemaining] = useState(100);  // Show filaments with AT MOST this %
+  const [minRemaining, setMinRemaining] = useState(0);    // Show filaments with AT LEAST this %
 
   // Laden der Hersteller, Materialien und Farben aus der Datenbank
   const { data: manufacturers = [], isLoading: isLoadingManufacturers } = useQuery({
@@ -484,15 +487,19 @@ export function FilterSidebar({
 
       <div className="mb-6">
         <h2 className="text-lg font-medium dark:text-neutral-400 text-gray-700 mb-3">{t('filters.inventory')}</h2>
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Max Remaining Filter - show filaments with AT MOST this % */}
           <div>
             <span className="dark:text-neutral-400 text-gray-700 block mb-1">{t('filters.maxRemainingPercentage')}</span>
             <Slider
-              value={[minRemaining]}
+              value={[maxRemaining]}
               min={0}
               max={100}
               step={5}
-              onValueChange={(values) => setMinRemaining(values[0])}
+              onValueChange={(values) => {
+                setMaxRemaining(values[0]);
+                onMaxRemaining(values[0]);
+              }}
               className="w-full"
             />
             <div className="flex justify-between text-sm dark:text-neutral-300 text-gray-500 px-1 mt-1">
@@ -501,7 +508,31 @@ export function FilterSidebar({
               <span>100%</span>
             </div>
             <div className="text-xs dark:text-neutral-400 text-gray-600 mt-2">
-              {t('filters.showFilamentsWithMax')} {minRemaining}% {t('filters.fillLevel')}
+              {t('filters.showFilamentsWithMax')} {maxRemaining}% {t('filters.fillLevel')}
+            </div>
+          </div>
+          
+          {/* Min Remaining Filter - show filaments with AT LEAST this % */}
+          <div>
+            <span className="dark:text-neutral-400 text-gray-700 block mb-1">{t('filters.minRemainingPercentage') || "Min. Remaining (%)"}</span>
+            <Slider
+              value={[minRemaining]}
+              min={0}
+              max={100}
+              step={5}
+              onValueChange={(values) => {
+                setMinRemaining(values[0]);
+                onMinRemaining(values[0]);
+              }}
+              className="w-full"
+            />
+            <div className="flex justify-between text-sm dark:text-neutral-300 text-gray-500 px-1 mt-1">
+              <span>0%</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+            <div className="text-xs dark:text-neutral-400 text-gray-600 mt-2">
+              {t('filters.showFilamentsWithMin') || "Show filaments with min."} {minRemaining}% {t('filters.fillLevel')}
             </div>
           </div>
         </div>

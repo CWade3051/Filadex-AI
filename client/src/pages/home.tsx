@@ -32,7 +32,8 @@ export default function Home() {
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [selectedManufacturers, setSelectedManufacturers] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  const [minRemainingPercentage, setMinRemainingPercentage] = useState(0);
+  const [maxRemainingFilter, setMaxRemainingFilter] = useState(100); // Show filaments with AT MOST this %
+  const [minRemainingFilter, setMinRemainingFilter] = useState(0);   // Show filaments with AT LEAST this %
 
   // Fetch filaments with auto-refresh
   const { data: filaments = [], isLoading, refetch: refetchFilaments } = useQuery<Filament[]>({
@@ -60,11 +61,12 @@ export default function Home() {
     const matchesColor = selectedColors.length === 0 ||
       (filament.colorName && selectedColors.includes(filament.colorName));
 
-    // Filter by remaining percentage (umgedreht: zeige nur Filamente mit höchstens diesem Prozentsatz)
-    const matchesRemaining = minRemainingPercentage === 0 ||
-      Number(filament.remainingPercentage) <= minRemainingPercentage;
+    // Filter by remaining percentage
+    const remaining = Number(filament.remainingPercentage);
+    const matchesMaxRemaining = maxRemainingFilter >= 100 || remaining <= maxRemainingFilter;
+    const matchesMinRemaining = minRemainingFilter <= 0 || remaining >= minRemainingFilter;
 
-    return matchesSearch && matchesMaterial && matchesManufacturer && matchesColor && matchesRemaining;
+    return matchesSearch && matchesMaterial && matchesManufacturer && matchesColor && matchesMaxRemaining && matchesMinRemaining;
   });
 
   // Add a new filament
@@ -462,8 +464,12 @@ export default function Home() {
     setSelectedMaterials(materials);
   }, []);
 
+  const handleMaxRemainingChange = useCallback((value: number) => {
+    setMaxRemainingFilter(value);
+  }, []);
+
   const handleMinRemainingChange = useCallback((value: number) => {
-    setMinRemainingPercentage(value);
+    setMinRemainingFilter(value);
   }, []);
 
   const handleManufacturerChange = useCallback((manufacturers: string[]) => {
@@ -493,6 +499,7 @@ export default function Home() {
             <FilterSidebar
               onSearchChange={handleSearchChange}
               onMaterialChange={handleMaterialChange}
+              onMaxRemaining={handleMaxRemainingChange}
               onMinRemaining={handleMinRemainingChange}
               onManufacturerChange={handleManufacturerChange}
               onColorChange={handleColorChange}

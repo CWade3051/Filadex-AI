@@ -617,6 +617,8 @@ const translations = {
     inventory: 'Inventory',
     maxRemainingPercentage: 'Max. Remaining (%)',
     showFilamentsWithMax: 'Show filaments with max.',
+    minRemainingPercentage: 'Min. Remaining (%)',
+    showFilamentsWithMin: 'Show filaments with min.',
     fillLevel: 'fill level',
     sortBy: 'Sort by...',
     nameAZ: 'Name (A-Z)',

@@ -598,6 +598,8 @@ const translations = {
     inventory: 'Bestand',
     maxRemainingPercentage: 'Max. Restmenge (%)',
     showFilamentsWithMax: 'Nur Filamente mit max.',
+    minRemainingPercentage: 'Min. Restmenge (%)',
+    showFilamentsWithMin: 'Nur Filamente mit min.',
     fillLevel: 'Füllstand anzeigen',
     sortBy: 'Sortieren nach...',
     nameAZ: 'Name (A-Z)',
