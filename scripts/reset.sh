@@ -202,21 +202,20 @@ PGPASSWORD=filadex_dev psql -h localhost -p 5433 -U filadex_dev -d filadex_dev -
   -- Storage Locations (sorted alphabetically with proper naming)
   -- =========================================
   INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('A - Bedroom Shelf', '2 shelves: top has 3 rows x 5 high, bottom has 2 rows x 10', 45, 1) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('B - Sealable Storage', '1 row deep, 2 rows high, 6 spools each', 12, 2) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('B - Sealable Zip Up Small', '1 row deep, 2 high, 4 spools each', 8, 2) ON CONFLICT DO NOTHING;
   INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('C - Sealable Zip Up Large 1', '2 rows deep, 2 high, 6 spools each', 24, 3) ON CONFLICT DO NOTHING;
   INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('D - Sealable Zip Up Large 2', '2 rows deep, 2 high, 6 spools each', 24, 4) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('E - Sealable Zip Up Small', '1 row deep, 2 high, 4 spools each', 8, 5) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('F - Rod Above Printer', '1 row, 8 spools', 8, 6) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('G - 9-Level Rack', '9 rows high, 6 spools each (1 row for mini spools)', 81, 7) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS HT - H2C 1', 'AMS HT unit connected to H2C, acts as dryer', 1, 100) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS HT - H2C 2', 'AMS HT unit connected to H2C, acts as dryer', 1, 101) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS HT - P2S', 'AMS HT unit connected to P2S, acts as dryer', 1, 102) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS Pro 2 - H2C 1', 'AMS Pro 2 unit connected to H2C, acts as dryer', 4, 103) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS Pro 2 - H2C 2', 'AMS Pro 2 unit connected to H2C, acts as dryer', 4, 104) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS Pro 2 - P2S', 'AMS Pro 2 unit connected to P2S, acts as dryer', 4, 105) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('FLSUN S1 Pro', 'Spool attached to FLSUN S1 Pro printer, acts as dryer', 1, 200) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('Creality Dryer', 'Creality dryer unit, holds up to 2 spools', 2, 201) ON CONFLICT DO NOTHING;
-  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('Polymaker Dryer', 'Polymaker dryer unit, holds 1 spool', 1, 202) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('E - Rod Above Printer', '1 row, 8 spools', 8, 5) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('F - 9-Level Rack', '9 rows high, 6 spools each (1 row for mini spools)', 81, 6) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS Pro 2 - H2C 1', 'AMS Pro 2 unit connected to H2C, acts as dryer', 4, 7) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS Pro 2 - H2C 2', 'AMS Pro 2 unit connected to H2C, acts as dryer', 4, 8) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS Pro 2 - P2S', 'AMS Pro 2 unit connected to P2S, acts as dryer', 4, 9) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS HT - H2C 1', 'AMS HT unit connected to H2C, acts as dryer', 1, 10) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS HT - H2C 2', 'AMS HT unit connected to H2C, acts as dryer', 1, 11) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('AMS HT - P2S', 'AMS HT unit connected to P2S, acts as dryer', 1, 12) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('FLSUN S1 Pro', 'Spool attached to FLSUN S1 Pro printer, acts as dryer', 1, 14) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('Creality Dryer', 'Creality dryer unit, holds up to 2 spools', 2, 15) ON CONFLICT DO NOTHING;
+  INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('Polymaker Dryer', 'Polymaker dryer unit, holds 1 spool', 1, 16) ON CONFLICT DO NOTHING;
   
   -- =========================================
   -- Printers

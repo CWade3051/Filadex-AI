@@ -575,20 +575,20 @@ export function registerSettingsRoutes(app: Express): void {
     try {
       const defaultLocations = [
         { name: "A - Bedroom Shelf", sortOrder: 1 },
-        { name: "B - Sealed Storage Small", sortOrder: 2 },
-        { name: "C - Sealed Storage Large #1", sortOrder: 3 },
-        { name: "D - Sealed Storage Large #2", sortOrder: 4 },
-        { name: "E - Above Printer Rod", sortOrder: 5 },
+        { name: "B - Sealable Zip Up Small", sortOrder: 2 },
+        { name: "C - Sealable Zip Up Large 1", sortOrder: 3 },
+        { name: "D - Sealable Zip Up Large 2", sortOrder: 4 },
+        { name: "E - Rod Above Printer", sortOrder: 5 },
         { name: "F - 9-Level Rack", sortOrder: 6 },
-        { name: "AMS HT #1 (H2C)", sortOrder: 7 },
-        { name: "AMS HT #2 (H2C)", sortOrder: 8 },
-        { name: "AMS HT #3 (P2S)", sortOrder: 9 },
-        { name: "AMS Pro #1 (H2C)", sortOrder: 10 },
-        { name: "AMS Pro #2 (H2C)", sortOrder: 11 },
-        { name: "AMS Pro #3 (P2S)", sortOrder: 12 },
-        { name: "FLSUN S1 Pro", sortOrder: 13 },
-        { name: "Creality Dryer", sortOrder: 14 },
-        { name: "PolyMaker Dryer", sortOrder: 15 },
+        { name: "AMS Pro 2 - H2C 1", sortOrder: 7 },
+        { name: "AMS Pro 2 - H2C 2", sortOrder: 8 },
+        { name: "AMS Pro 2 - P2S", sortOrder: 9 },
+        { name: "AMS HT - H2C 1", sortOrder: 10 },
+        { name: "AMS HT - H2C 2", sortOrder: 11 },
+        { name: "AMS HT - P2S", sortOrder: 12 },
+        { name: "FLSUN S1 Pro", sortOrder: 14 },
+        { name: "Creality Dryer", sortOrder: 15 },
+        { name: "Polymaker Dryer", sortOrder: 16 },
       ];
 
       const existingLocations = await storage.getStorageLocations();
@@ -599,11 +599,17 @@ export function registerSettingsRoutes(app: Express): void {
 
       for (const location of defaultLocations) {
         if (existingNames.has(location.name.toLowerCase())) {
+          const existing = existingLocations.find(
+            (item) => item.name.toLowerCase() === location.name.toLowerCase()
+          );
+          if (existing && existing.sortOrder !== location.sortOrder) {
+            await storage.updateStorageLocationOrder(existing.id, location.sortOrder);
+          }
           skipped++;
           continue;
         }
         
-        await storage.createStorageLocation({ name: location.name });
+        await storage.createStorageLocation({ name: location.name, sortOrder: location.sortOrder });
         // Update sort order
         const newLocations = await storage.getStorageLocations();
         const newLoc = newLocations.find(l => l.name === location.name);
@@ -611,6 +617,16 @@ export function registerSettingsRoutes(app: Express): void {
           await storage.updateStorageLocationOrder(newLoc.id, location.sortOrder);
         }
         added++;
+      }
+
+      const legacyRack = existingLocations.find(
+        (item) => item.name.toLowerCase() === "g - 9-level rack"
+      );
+      if (legacyRack) {
+        await storage.updateStorageLocation(legacyRack.id, {
+          name: "F - 9-Level Rack",
+          sortOrder: 6,
+        });
       }
 
       res.status(200).json({ 

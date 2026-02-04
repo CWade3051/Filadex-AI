@@ -387,6 +387,7 @@ export const slicerProfiles = pgTable("slicer_profiles", {
   
   // Parsed settings (JSON string)
   parsedSettings: text("parsed_settings"),
+  rawProfile: text("raw_profile"),
   
   // Metadata
   slicerVersion: text("slicer_version"),
@@ -406,6 +407,21 @@ export const insertSlicerProfileSchema = createInsertSchema(slicerProfiles).omit
 
 export type InsertSlicerProfile = z.infer<typeof insertSlicerProfileSchema>;
 export type SlicerProfile = typeof slicerProfiles.$inferSelect;
+
+export const filamentSlicerProfiles = pgTable("filament_slicer_profiles", {
+  id: serial("id").primaryKey(),
+  filamentId: integer("filament_id").references(() => filaments.id, { onDelete: "cascade" }),
+  slicerProfileId: integer("slicer_profile_id").references(() => slicerProfiles.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertFilamentSlicerProfileSchema = createInsertSchema(filamentSlicerProfiles).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertFilamentSlicerProfile = z.infer<typeof insertFilamentSlicerProfileSchema>;
+export type FilamentSlicerProfile = typeof filamentSlicerProfiles.$inferSelect;
 
 // Phase 3: Cloud Backup Configuration
 export const cloudBackupConfigs = pgTable("cloud_backup_configs", {

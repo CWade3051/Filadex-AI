@@ -198,6 +198,28 @@ Regal B
     }
   });
 
+  const populateDefaultsMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("/api/storage-locations/populate-defaults", {
+        method: "POST"
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/storage-locations"] });
+      toast({
+        title: t('settings.storageLocations.populateDefaultsSuccess'),
+        description: data?.message || t('settings.storageLocations.populateDefaultsSuccessDescription')
+      });
+    },
+    onError: () => {
+      toast({
+        title: t('common.error'),
+        description: t('settings.storageLocations.populateDefaultsError'),
+        variant: "destructive"
+      });
+    }
+  });
+
   // Handler für das Absenden des Formulars
   const onSubmit = (data: FormValues) => {
     addLocationMutation.mutate(data);
@@ -208,7 +230,15 @@ Regal B
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-2">
           <CardHeader className="pb-3">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={populateDefaultsMutation.isPending}
+                onClick={() => populateDefaultsMutation.mutate()}
+              >
+                {t('settings.storageLocations.populateDefaults')}
+              </Button>
               <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -254,7 +284,7 @@ Regal B
                     <TableRow>
                       <TableHead className="w-10"></TableHead>
                       <TableHead className="w-[65%]">Name</TableHead>
-                      <TableHead className="text-right w-16">Aktionen</TableHead>
+                      <TableHead className="text-right w-16">{t('settings.storageLocations.actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <DragDropContext onDragEnd={handleDragEnd}>

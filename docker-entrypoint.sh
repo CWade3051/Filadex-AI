@@ -232,12 +232,20 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
     original_filename TEXT,
     file_type TEXT,
     parsed_settings TEXT,
+    raw_profile TEXT,
     slicer_version TEXT,
     printer_model TEXT,
     notes TEXT,
     is_public BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS public.filament_slicer_profiles (
+    id SERIAL PRIMARY KEY,
+    filament_id INTEGER REFERENCES public.filaments(id) ON DELETE CASCADE,
+    slicer_profile_id INTEGER REFERENCES public.slicer_profiles(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 
   -- Phase 3: Cloud Backup Configuration
@@ -281,7 +289,7 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
 "
 
 # Check if the tables were created
-for TABLE in users manufacturers materials colors diameters storage_locations filaments user_sharing print_jobs filament_history material_compatibility slicer_profiles cloud_backup_configs backup_history; do
+for TABLE in users manufacturers materials colors diameters storage_locations filaments user_sharing print_jobs filament_history material_compatibility slicer_profiles filament_slicer_profiles cloud_backup_configs backup_history; do
   EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$TABLE')")
   echo "Table $TABLE created: $EXISTS"
 done
@@ -316,6 +324,16 @@ if [ "$TEMPERATURE_COLUMN_EXISTS" = "f" ]; then
   echo "Temperature unit column added."
 else
   echo "Temperature unit column already exists."
+fi
+
+# Add raw_profile column if it doesn't exist
+RAW_PROFILE_COLUMN_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'slicer_profiles' AND column_name = 'raw_profile')")
+if [ "$RAW_PROFILE_COLUMN_EXISTS" = "f" ]; then
+  echo "Adding raw_profile column to slicer_profiles table..."
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.slicer_profiles ADD COLUMN raw_profile TEXT;"
+  echo "raw_profile column added."
+else
+  echo "raw_profile column already exists."
 fi
 
 # Add openai_api_key column if it doesn't exist

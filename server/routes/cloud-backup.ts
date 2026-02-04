@@ -16,12 +16,13 @@ import {
   slicers,
   printJobs,
   slicerProfiles,
+  filamentSlicerProfiles,
   materialCompatibility,
   filamentHistory,
   userSharing,
   users,
 } from "@shared/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import fs from "fs";
@@ -139,6 +140,13 @@ async function generateBackupData(userId: number) {
   // Filter to only include history for user's filaments
   const filteredHistory = userFilamentHistory.filter(h => filamentIds.includes(h.filamentId!));
 
+  const userFilamentSlicerProfiles = filamentIds.length > 0
+    ? await db
+        .select()
+        .from(filamentSlicerProfiles)
+        .where(inArray(filamentSlicerProfiles.filamentId, filamentIds))
+    : [];
+
   // Get user's backup history
   const userBackupHistory = await db
     .select()
@@ -165,6 +173,7 @@ async function generateBackupData(userId: number) {
       filaments: userFilaments,
       printJobs: userPrintJobs,
       slicerProfiles: userProfiles,
+      filamentSlicerProfiles: userFilamentSlicerProfiles,
       filamentHistory: filteredHistory,
       userSharing: userSharingSettings,
       backupHistory: userBackupHistory,
@@ -200,6 +209,7 @@ async function generateAdminBackupData() {
   const allFilaments = await db.select().from(filaments);
   const allPrintJobs = await db.select().from(printJobs);
   const allProfiles = await db.select().from(slicerProfiles);
+  const allFilamentSlicerProfiles = await db.select().from(filamentSlicerProfiles);
   const allFilamentHistory = await db.select().from(filamentHistory);
   const allUserSharing = await db.select().from(userSharing);
   const allBackupHistory = await db.select().from(backupHistory);
@@ -225,6 +235,7 @@ async function generateAdminBackupData() {
       filaments: allFilaments,
       printJobs: allPrintJobs,
       slicerProfiles: allProfiles,
+      filamentSlicerProfiles: allFilamentSlicerProfiles,
       filamentHistory: allFilamentHistory,
       userSharing: allUserSharing,
       backupHistory: allBackupHistory,
@@ -811,6 +822,7 @@ export function registerCloudBackupRoutes(app: Express) {
         filaments: 0,
         printJobs: 0,
         slicerProfiles: 0,
+        filamentSlicerProfiles: 0,
         filamentHistory: 0,
         userSharing: 0,
         materialCompatibility: 0,
@@ -820,6 +832,7 @@ export function registerCloudBackupRoutes(app: Express) {
 
       // Map old filament IDs to new IDs for history references
       const filamentIdMap: Record<number, number> = {};
+      const profileIdMap: Record<number, number> = {};
 
       // Restore user settings (non-sensitive)
       if (userSettings) {
@@ -923,15 +936,40 @@ export function registerCloudBackupRoutes(app: Express) {
           const { id, userId: oldUserId, ...profileData } = profile;
           
           try {
-            await db.insert(slicerProfiles).values({
+            const [newProfile] = await db.insert(slicerProfiles).values({
               ...profileData,
               userId,
               createdAt: profileData.createdAt ? new Date(profileData.createdAt) : new Date(),
               updatedAt: new Date(),
-            });
+            }).returning();
+            if (id && newProfile) {
+              profileIdMap[id] = newProfile.id;
+            }
             restored.slicerProfiles++;
           } catch (insertError) {
             appLogger.warn("Could not restore slicer profile:", insertError);
+          }
+        }
+      }
+
+      // Restore filament/profile links
+      if (data.filamentSlicerProfiles && Array.isArray(data.filamentSlicerProfiles)) {
+        for (const link of data.filamentSlicerProfiles) {
+          const { id, filamentId: oldFilamentId, slicerProfileId: oldProfileId, ...linkData } = link;
+          const newFilamentId = filamentIdMap[oldFilamentId];
+          const newProfileId = profileIdMap[oldProfileId];
+          if (!newFilamentId || !newProfileId) continue;
+
+          try {
+            await db.insert(filamentSlicerProfiles).values({
+              ...linkData,
+              filamentId: newFilamentId,
+              slicerProfileId: newProfileId,
+              createdAt: linkData.createdAt ? new Date(linkData.createdAt) : new Date(),
+            });
+            restored.filamentSlicerProfiles++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore filament slicer profile link:", insertError);
           }
         }
       }
@@ -1448,6 +1486,7 @@ export function registerCloudBackupRoutes(app: Express) {
         filaments: 0,
         printJobs: 0,
         slicerProfiles: 0,
+        filamentSlicerProfiles: 0,
         filamentHistory: 0,
         userSharing: 0,
         materialCompatibility: 0,
@@ -1456,6 +1495,7 @@ export function registerCloudBackupRoutes(app: Express) {
 
       // Map old filament IDs to new IDs for history references
       const filamentIdMap: Record<number, number> = {};
+      const profileIdMap: Record<number, number> = {};
 
       // Restore user settings (non-sensitive)
       if (userSettings) {
@@ -1559,15 +1599,40 @@ export function registerCloudBackupRoutes(app: Express) {
           const { id, userId: oldUserId, ...profileData } = profile;
           
           try {
-            await db.insert(slicerProfiles).values({
+            const [newProfile] = await db.insert(slicerProfiles).values({
               ...profileData,
               userId,
               createdAt: profileData.createdAt ? new Date(profileData.createdAt) : new Date(),
               updatedAt: new Date(),
-            });
+            }).returning();
+            if (id && newProfile) {
+              profileIdMap[id] = newProfile.id;
+            }
             restored.slicerProfiles++;
           } catch (insertError) {
             appLogger.warn("Could not restore slicer profile:", insertError);
+          }
+        }
+      }
+
+      // Restore filament/profile links
+      if (data.filamentSlicerProfiles && Array.isArray(data.filamentSlicerProfiles)) {
+        for (const link of data.filamentSlicerProfiles) {
+          const { id, filamentId: oldFilamentId, slicerProfileId: oldProfileId, ...linkData } = link;
+          const newFilamentId = filamentIdMap[oldFilamentId];
+          const newProfileId = profileIdMap[oldProfileId];
+          if (!newFilamentId || !newProfileId) continue;
+
+          try {
+            await db.insert(filamentSlicerProfiles).values({
+              ...linkData,
+              filamentId: newFilamentId,
+              slicerProfileId: newProfileId,
+              createdAt: linkData.createdAt ? new Date(linkData.createdAt) : new Date(),
+            });
+            restored.filamentSlicerProfiles++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore filament slicer profile link:", insertError);
           }
         }
       }
@@ -1693,6 +1758,7 @@ export function registerCloudBackupRoutes(app: Express) {
         filaments: 0,
         printJobs: 0,
         slicerProfiles: 0,
+        filamentSlicerProfiles: 0,
         filamentHistory: 0,
         userSharing: 0,
         materialCompatibility: 0,
@@ -1701,6 +1767,7 @@ export function registerCloudBackupRoutes(app: Express) {
       // Map old IDs to new IDs
       const userIdMap: Record<number, number> = {};
       const filamentIdMap: Record<number, number> = {};
+      const profileIdMap: Record<number, number> = {};
 
       // Restore users (create if not exists)
       if (data.users && Array.isArray(data.users)) {
@@ -1841,15 +1908,40 @@ export function registerCloudBackupRoutes(app: Express) {
           if (!newUserId) continue;
           
           try {
-            await db.insert(slicerProfiles).values({
+            const [newProfile] = await db.insert(slicerProfiles).values({
               ...profileData,
               userId: newUserId,
               createdAt: profileData.createdAt ? new Date(profileData.createdAt) : new Date(),
               updatedAt: new Date(),
-            });
+            }).returning();
+            if (id && newProfile) {
+              profileIdMap[id] = newProfile.id;
+            }
             restored.slicerProfiles++;
           } catch (insertError) {
             appLogger.warn("Could not restore slicer profile:", insertError);
+          }
+        }
+      }
+
+      // Restore filament/profile links
+      if (data.filamentSlicerProfiles && Array.isArray(data.filamentSlicerProfiles)) {
+        for (const link of data.filamentSlicerProfiles) {
+          const { id, filamentId: oldFilamentId, slicerProfileId: oldProfileId, ...linkData } = link;
+          const newFilamentId = filamentIdMap[oldFilamentId];
+          const newProfileId = profileIdMap[oldProfileId];
+          if (!newFilamentId || !newProfileId) continue;
+
+          try {
+            await db.insert(filamentSlicerProfiles).values({
+              ...linkData,
+              filamentId: newFilamentId,
+              slicerProfileId: newProfileId,
+              createdAt: linkData.createdAt ? new Date(linkData.createdAt) : new Date(),
+            });
+            restored.filamentSlicerProfiles++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore filament slicer profile link:", insertError);
           }
         }
       }
@@ -1956,6 +2048,7 @@ export function registerCloudBackupRoutes(app: Express) {
         filaments: 0,
         printJobs: 0,
         slicerProfiles: 0,
+        filamentSlicerProfiles: 0,
         filamentHistory: 0,
         userSharing: 0,
         materialCompatibility: 0,
@@ -1965,6 +2058,7 @@ export function registerCloudBackupRoutes(app: Express) {
       // Map old IDs to new IDs
       const userIdMap: Record<number, number> = {};
       const filamentIdMap: Record<number, number> = {};
+      const profileIdMap: Record<number, number> = {};
 
       // Restore users (create if not exists)
       if (data.users && Array.isArray(data.users)) {
@@ -2104,15 +2198,40 @@ export function registerCloudBackupRoutes(app: Express) {
           if (!newUserId) continue;
           
           try {
-            await db.insert(slicerProfiles).values({
+            const [newProfile] = await db.insert(slicerProfiles).values({
               ...profileData,
               userId: newUserId,
               createdAt: profileData.createdAt ? new Date(profileData.createdAt) : new Date(),
               updatedAt: new Date(),
-            });
+            }).returning();
+            if (id && newProfile) {
+              profileIdMap[id] = newProfile.id;
+            }
             restored.slicerProfiles++;
           } catch (insertError) {
             appLogger.warn("Could not restore slicer profile:", insertError);
+          }
+        }
+      }
+
+      // Restore filament/profile links
+      if (data.filamentSlicerProfiles && Array.isArray(data.filamentSlicerProfiles)) {
+        for (const link of data.filamentSlicerProfiles) {
+          const { id, filamentId: oldFilamentId, slicerProfileId: oldProfileId, ...linkData } = link;
+          const newFilamentId = filamentIdMap[oldFilamentId];
+          const newProfileId = profileIdMap[oldProfileId];
+          if (!newFilamentId || !newProfileId) continue;
+
+          try {
+            await db.insert(filamentSlicerProfiles).values({
+              ...linkData,
+              filamentId: newFilamentId,
+              slicerProfileId: newProfileId,
+              createdAt: linkData.createdAt ? new Date(linkData.createdAt) : new Date(),
+            });
+            restored.filamentSlicerProfiles++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore filament slicer profile link:", insertError);
           }
         }
       }

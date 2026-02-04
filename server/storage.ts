@@ -9,7 +9,8 @@ import {
   slicers, type Slicer, type InsertSlicer,
   printJobs, type PrintJob, type InsertPrintJob,
   filamentHistory, type FilamentHistory, type InsertFilamentHistory,
-  slicerProfiles, type SlicerProfile, type InsertSlicerProfile
+  slicerProfiles, type SlicerProfile, type InsertSlicerProfile,
+  filamentSlicerProfiles, type FilamentSlicerProfile, type InsertFilamentSlicerProfile
 } from "@shared/schema";
 import { users, type User, type InsertUser } from "@shared/schema";
 import { db } from "./db";
@@ -85,6 +86,12 @@ export interface IStorage {
   createSlicerProfile(profile: InsertSlicerProfile): Promise<SlicerProfile>;
   updateSlicerProfile(id: number, userId: number, updates: Partial<InsertSlicerProfile>): Promise<SlicerProfile | undefined>;
   deleteSlicerProfile(id: number, userId: number): Promise<boolean>;
+
+  // Filament <-> Slicer Profile associations
+  getSlicerProfilesForFilament(userId: number, filamentId: number): Promise<SlicerProfile[]>;
+  setFilamentSlicerProfiles(filamentId: number, profileIds: number[]): Promise<void>;
+  getFilamentsForSlicerProfile(userId: number, profileId: number): Promise<Filament[]>;
+  setSlicerProfileFilaments(profileId: number, filamentIds: number[]): Promise<void>;
 }
 
 // Database Storage implementation using PostgreSQL
@@ -348,7 +355,32 @@ export class DatabaseStorage implements IStorage {
 
   // Storage Location implementations
   async getStorageLocations(): Promise<StorageLocation[]> {
-    return await db.select().from(storageLocations).orderBy(storageLocations.sortOrder, storageLocations.name);
+    const orderExpression = sql`
+      CASE ${storageLocations.name}
+        WHEN 'A - Bedroom Shelf' THEN 1
+        WHEN 'B - Sealable Zip Up Small' THEN 2
+        WHEN 'C - Sealable Zip Up Large 1' THEN 3
+        WHEN 'D - Sealable Zip Up Large 2' THEN 4
+        WHEN 'E - Rod Above Printer' THEN 5
+        WHEN 'F - 9-Level Rack' THEN 6
+        WHEN 'G - 9-Level Rack' THEN 6
+        WHEN 'AMS Pro 2 - H2C 1' THEN 7
+        WHEN 'AMS Pro 2 - H2C 2' THEN 8
+        WHEN 'AMS Pro 2 - P2S' THEN 9
+        WHEN 'AMS HT - H2C 1' THEN 10
+        WHEN 'AMS HT - H2C 2' THEN 11
+        WHEN 'AMS HT - P2S' THEN 12
+        WHEN 'FLSUN S1 Pro' THEN 14
+        WHEN 'Creality Dryer' THEN 15
+        WHEN 'Polymaker Dryer' THEN 16
+        ELSE COALESCE(${storageLocations.sortOrder}, 999)
+      END
+    `;
+
+    return await db
+      .select()
+      .from(storageLocations)
+      .orderBy(orderExpression, storageLocations.name);
   }
 
   async createStorageLocation(insertLocation: InsertStorageLocation): Promise<StorageLocation> {
@@ -489,6 +521,151 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return history;
   }
+
+  // Slicer Profile implementations
+  async getSlicerProfiles(userId: number): Promise<SlicerProfile[]> {
+    return await db
+      .select()
+      .from(slicerProfiles)
+      .where(eq(slicerProfiles.userId, userId))
+      .orderBy(slicerProfiles.createdAt);
+  }
+
+  async getSlicerProfile(id: number, userId: number): Promise<SlicerProfile | undefined> {
+    const [profile] = await db
+      .select()
+      .from(slicerProfiles)
+      .where(and(eq(slicerProfiles.id, id), eq(slicerProfiles.userId, userId)));
+    return profile || undefined;
+  }
+
+  async getPublicSlicerProfiles(manufacturer?: string, material?: string): Promise<SlicerProfile[]> {
+    let query = db
+      .select()
+      .from(slicerProfiles)
+      .where(eq(slicerProfiles.isPublic, true));
+
+    const results = await query;
+
+    return results.filter((profile) => {
+      if (manufacturer && profile.manufacturer?.toLowerCase() !== manufacturer.toLowerCase()) {
+        return false;
+      }
+      if (material && profile.material?.toLowerCase() !== material.toLowerCase()) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  async getSuggestedProfiles(
+    userId: number,
+    manufacturer?: string | null,
+    material?: string | null
+  ): Promise<SlicerProfile[]> {
+    const userProfiles = await this.getSlicerProfiles(userId);
+    const publicProfiles = await this.getPublicSlicerProfiles();
+
+    const allProfiles = [...userProfiles];
+
+    for (const profile of publicProfiles) {
+      if (profile.userId !== userId) {
+        allProfiles.push(profile);
+      }
+    }
+
+    return allProfiles.filter((profile) => {
+      if (manufacturer && profile.manufacturer?.toLowerCase() === manufacturer.toLowerCase()) {
+        return true;
+      }
+      if (material && profile.material?.toLowerCase() === material.toLowerCase()) {
+        return true;
+      }
+      if (
+        manufacturer &&
+        material &&
+        profile.manufacturer?.toLowerCase() === manufacturer.toLowerCase() &&
+        profile.material?.toLowerCase() === material.toLowerCase()
+      ) {
+        return true;
+      }
+      return false;
+    });
+  }
+
+  async createSlicerProfile(profile: InsertSlicerProfile): Promise<SlicerProfile> {
+    const [created] = await db.insert(slicerProfiles).values(profile).returning();
+    return created;
+  }
+
+  async updateSlicerProfile(
+    id: number,
+    userId: number,
+    updates: Partial<InsertSlicerProfile>
+  ): Promise<SlicerProfile | undefined> {
+    const [updated] = await db
+      .update(slicerProfiles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(slicerProfiles.id, id), eq(slicerProfiles.userId, userId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteSlicerProfile(id: number, userId: number): Promise<boolean> {
+    const result = await db
+      .delete(slicerProfiles)
+      .where(and(eq(slicerProfiles.id, id), eq(slicerProfiles.userId, userId)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Filament <-> Slicer Profile associations
+  async getSlicerProfilesForFilament(userId: number, filamentId: number): Promise<SlicerProfile[]> {
+    const profileIds = await db
+      .select({ id: filamentSlicerProfiles.slicerProfileId })
+      .from(filamentSlicerProfiles)
+      .innerJoin(filaments, eq(filamentSlicerProfiles.filamentId, filaments.id))
+      .where(and(eq(filaments.userId, userId), eq(filamentSlicerProfiles.filamentId, filamentId)));
+
+    const ids = profileIds.map((row) => row.id).filter((id): id is number => typeof id === "number");
+    if (ids.length === 0) return [];
+
+    return await db.select().from(slicerProfiles).where(inArray(slicerProfiles.id, ids));
+  }
+
+  async setFilamentSlicerProfiles(filamentId: number, profileIds: number[]): Promise<void> {
+    await db.delete(filamentSlicerProfiles).where(eq(filamentSlicerProfiles.filamentId, filamentId));
+    if (profileIds.length === 0) return;
+    await db.insert(filamentSlicerProfiles).values(
+      profileIds.map((profileId) => ({
+        filamentId,
+        slicerProfileId: profileId,
+      }))
+    );
+  }
+
+  async getFilamentsForSlicerProfile(userId: number, profileId: number): Promise<Filament[]> {
+    const filamentIds = await db
+      .select({ id: filamentSlicerProfiles.filamentId })
+      .from(filamentSlicerProfiles)
+      .innerJoin(filaments, eq(filamentSlicerProfiles.filamentId, filaments.id))
+      .where(and(eq(filaments.userId, userId), eq(filamentSlicerProfiles.slicerProfileId, profileId)));
+
+    const ids = filamentIds.map((row) => row.id).filter((id): id is number => typeof id === "number");
+    if (ids.length === 0) return [];
+
+    return await db.select().from(filaments).where(inArray(filaments.id, ids));
+  }
+
+  async setSlicerProfileFilaments(profileId: number, filamentIds: number[]): Promise<void> {
+    await db.delete(filamentSlicerProfiles).where(eq(filamentSlicerProfiles.slicerProfileId, profileId));
+    if (filamentIds.length === 0) return;
+    await db.insert(filamentSlicerProfiles).values(
+      filamentIds.map((filamentId) => ({
+        filamentId,
+        slicerProfileId: profileId,
+      }))
+    );
+  }
 }
 
 // Memory Storage implementation for development and testing
@@ -500,6 +677,8 @@ export class MemStorage implements IStorage {
   private colorStore: Map<number, Color>;
   private diameterStore: Map<number, Diameter>;
   private storageLocationStore: Map<number, StorageLocation>;
+  private slicerProfileStore: Map<number, SlicerProfile>;
+  private filamentSlicerProfileStore: FilamentSlicerProfile[];
 
   userCurrentId: number;
   filamentCurrentId: number;
@@ -508,6 +687,7 @@ export class MemStorage implements IStorage {
   colorCurrentId: number;
   diameterCurrentId: number;
   storageLocationCurrentId: number;
+  slicerProfileCurrentId: number;
 
   constructor() {
     this.users = new Map();
@@ -517,6 +697,8 @@ export class MemStorage implements IStorage {
     this.colorStore = new Map();
     this.diameterStore = new Map();
     this.storageLocationStore = new Map();
+    this.slicerProfileStore = new Map();
+    this.filamentSlicerProfileStore = [];
 
     this.userCurrentId = 1;
     this.filamentCurrentId = 1;
@@ -525,6 +707,7 @@ export class MemStorage implements IStorage {
     this.colorCurrentId = 1;
     this.diameterCurrentId = 1;
     this.storageLocationCurrentId = 1;
+    this.slicerProfileCurrentId = 1;
 
     // Add some initial data
     this.createFilament({
@@ -838,31 +1021,20 @@ export class MemStorage implements IStorage {
 
   // Slicer Profile implementations
   async getSlicerProfiles(userId: number): Promise<SlicerProfile[]> {
-    return await db
-      .select()
-      .from(slicerProfiles)
-      .where(eq(slicerProfiles.userId, userId))
-      .orderBy(slicerProfiles.createdAt);
+    return Array.from(this.slicerProfileStore.values())
+      .filter((profile) => profile.userId === userId)
+      .sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
   }
 
   async getSlicerProfile(id: number, userId: number): Promise<SlicerProfile | undefined> {
-    const [profile] = await db
-      .select()
-      .from(slicerProfiles)
-      .where(and(eq(slicerProfiles.id, id), eq(slicerProfiles.userId, userId)));
-    return profile || undefined;
+    const profile = this.slicerProfileStore.get(id);
+    if (!profile || profile.userId !== userId) return undefined;
+    return profile;
   }
 
   async getPublicSlicerProfiles(manufacturer?: string, material?: string): Promise<SlicerProfile[]> {
-    let query = db
-      .select()
-      .from(slicerProfiles)
-      .where(eq(slicerProfiles.isPublic, true));
-
-    const results = await query;
-
-    // Filter by manufacturer and material if provided
-    return results.filter((profile) => {
+    return Array.from(this.slicerProfileStore.values()).filter((profile) => {
+      if (!profile.isPublic) return false;
       if (manufacturer && profile.manufacturer?.toLowerCase() !== manufacturer.toLowerCase()) {
         return false;
       }
@@ -878,30 +1050,17 @@ export class MemStorage implements IStorage {
     manufacturer?: string | null,
     material?: string | null
   ): Promise<SlicerProfile[]> {
-    // Get user's own profiles and public profiles that match
     const userProfiles = await this.getSlicerProfiles(userId);
     const publicProfiles = await this.getPublicSlicerProfiles();
+    const allProfiles = [...userProfiles, ...publicProfiles.filter((p) => p.userId !== userId)];
 
-    const allProfiles = [...userProfiles];
-
-    // Add public profiles not owned by user
-    for (const profile of publicProfiles) {
-      if (profile.userId !== userId) {
-        allProfiles.push(profile);
-      }
-    }
-
-    // Filter by manufacturer and/or material
     return allProfiles.filter((profile) => {
-      // Exact manufacturer match
       if (manufacturer && profile.manufacturer?.toLowerCase() === manufacturer.toLowerCase()) {
         return true;
       }
-      // Exact material match
       if (material && profile.material?.toLowerCase() === material.toLowerCase()) {
         return true;
       }
-      // Both match
       if (
         manufacturer &&
         material &&
@@ -915,7 +1074,14 @@ export class MemStorage implements IStorage {
   }
 
   async createSlicerProfile(profile: InsertSlicerProfile): Promise<SlicerProfile> {
-    const [created] = await db.insert(slicerProfiles).values(profile).returning();
+    const id = this.slicerProfileCurrentId++;
+    const created: SlicerProfile = {
+      ...profile,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.slicerProfileStore.set(id, created);
     return created;
   }
 
@@ -924,19 +1090,72 @@ export class MemStorage implements IStorage {
     userId: number,
     updates: Partial<InsertSlicerProfile>
   ): Promise<SlicerProfile | undefined> {
-    const [updated] = await db
-      .update(slicerProfiles)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(and(eq(slicerProfiles.id, id), eq(slicerProfiles.userId, userId)))
-      .returning();
-    return updated || undefined;
+    const existing = await this.getSlicerProfile(id, userId);
+    if (!existing) return undefined;
+    const updated: SlicerProfile = { ...existing, ...updates, updatedAt: new Date() };
+    this.slicerProfileStore.set(id, updated);
+    return updated;
   }
 
   async deleteSlicerProfile(id: number, userId: number): Promise<boolean> {
-    const result = await db
-      .delete(slicerProfiles)
-      .where(and(eq(slicerProfiles.id, id), eq(slicerProfiles.userId, userId)));
-    return (result.rowCount ?? 0) > 0;
+    const existing = await this.getSlicerProfile(id, userId);
+    if (!existing) return false;
+    this.slicerProfileStore.delete(id);
+    this.filamentSlicerProfileStore = this.filamentSlicerProfileStore.filter(
+      (link) => link.slicerProfileId !== id
+    );
+    return true;
+  }
+
+  // Filament <-> Slicer Profile associations
+  async getSlicerProfilesForFilament(userId: number, filamentId: number): Promise<SlicerProfile[]> {
+    const filament = this.filamentStore.get(filamentId);
+    if (!filament || filament.userId !== userId) return [];
+
+    const profileIds = this.filamentSlicerProfileStore
+      .filter((link) => link.filamentId === filamentId)
+      .map((link) => link.slicerProfileId);
+    return profileIds
+      .map((id) => this.slicerProfileStore.get(id))
+      .filter((profile): profile is SlicerProfile => Boolean(profile));
+  }
+
+  async setFilamentSlicerProfiles(filamentId: number, profileIds: number[]): Promise<void> {
+    this.filamentSlicerProfileStore = this.filamentSlicerProfileStore.filter(
+      (link) => link.filamentId !== filamentId
+    );
+    for (const profileId of profileIds) {
+      this.filamentSlicerProfileStore.push({
+        id: this.filamentSlicerProfileStore.length + 1,
+        filamentId,
+        slicerProfileId: profileId,
+        createdAt: new Date(),
+      });
+    }
+  }
+
+  async getFilamentsForSlicerProfile(userId: number, profileId: number): Promise<Filament[]> {
+    const filamentIds = this.filamentSlicerProfileStore
+      .filter((link) => link.slicerProfileId === profileId)
+      .map((link) => link.filamentId);
+    return filamentIds
+      .map((id) => this.filamentStore.get(id))
+      .filter((filament): filament is Filament => Boolean(filament))
+      .filter((filament) => filament.userId === userId);
+  }
+
+  async setSlicerProfileFilaments(profileId: number, filamentIds: number[]): Promise<void> {
+    this.filamentSlicerProfileStore = this.filamentSlicerProfileStore.filter(
+      (link) => link.slicerProfileId !== profileId
+    );
+    for (const filamentId of filamentIds) {
+      this.filamentSlicerProfileStore.push({
+        id: this.filamentSlicerProfileStore.length + 1,
+        filamentId,
+        slicerProfileId: profileId,
+        createdAt: new Date(),
+      });
+    }
   }
 }
 

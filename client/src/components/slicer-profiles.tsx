@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "@/i18n";
 import {
@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import {
   Upload,
   Download,
@@ -37,6 +39,8 @@ import {
   Lock,
   Loader2,
   Search,
+  Pencil,
+  X,
 } from "lucide-react";
 
 interface SlicerProfile {
@@ -60,9 +64,17 @@ interface SlicerProfile {
 interface SlicerProfilesProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialProfileId?: number | null;
 }
 
-export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
+interface FilamentListItem {
+  id: number;
+  name: string;
+  manufacturer?: string | null;
+  material?: string | null;
+}
+
+export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerProfilesProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -82,6 +94,12 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
   const [uploadNotes, setUploadNotes] = useState("");
   const [uploadIsPublic, setUploadIsPublic] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadFilamentIds, setUploadFilamentIds] = useState<number[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState<number | null>(null);
+  const [filamentPickerValue, setFilamentPickerValue] = useState("select");
+  const isBulkUpload = selectedFiles.length > 1;
 
   // Fetch profiles
   const { data: profiles = [], isLoading } = useQuery<SlicerProfile[]>({
@@ -111,6 +129,20 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
     enabled: open,
   });
 
+  const { data: filaments = [] } = useQuery<FilamentListItem[]>({
+    queryKey: ["/api/filaments"],
+    enabled: open,
+  });
+
+  const loadProfileFilaments = async (profileId: number) => {
+    try {
+      const linked = await apiRequest<FilamentListItem[]>(`/api/slicer-profiles/${profileId}/filaments`);
+      setUploadFilamentIds(linked.map((filament) => filament.id));
+    } catch {
+      setUploadFilamentIds([]);
+    }
+  };
+
   // Upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -120,8 +152,17 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
         credentials: "include",
       });
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to upload profile");
+        let message = "Failed to upload slicer profile";
+        try {
+          const error = await response.json();
+          message = error.message || message;
+        } catch {
+          try {
+            const text = await response.text();
+            if (text) message = text;
+          } catch {}
+        }
+        throw new Error(message);
       }
       return response.json();
     },
@@ -130,6 +171,103 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
       toast({
         title: "Profile Uploaded",
         description: "Your slicer profile has been uploaded successfully.",
+      });
+      resetUploadForm();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Upload Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: {
+      id: number;
+      payload: {
+        name: string;
+        manufacturer: string | null;
+        material: string | null;
+        printerModel: string | null;
+        slicerVersion: string | null;
+        notes: string | null;
+        isPublic: boolean;
+      };
+      filamentIds: number[];
+    }) => {
+      const response = await fetch(`/api/slicer-profiles/${data.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data.payload),
+      });
+      if (!response.ok) {
+        let message = "Failed to update slicer profile";
+        try {
+          const error = await response.json();
+          message = error.message || message;
+        } catch {
+          try {
+            const text = await response.text();
+            if (text) message = text;
+          } catch {}
+        }
+        throw new Error(message);
+      }
+
+      await apiRequest(`/api/slicer-profiles/${data.id}/filaments`, {
+        method: "PUT",
+        body: JSON.stringify({ filamentIds: data.filamentIds }),
+      });
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/slicer-profiles"] });
+      toast({
+        title: "Profile Updated",
+        description: "Your slicer profile has been updated successfully.",
+      });
+      resetUploadForm();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const uploadBulkMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/slicer-profiles/bulk", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        let message = "Failed to bulk upload slicer profiles";
+        try {
+          const error = await response.json();
+          message = error.message || message;
+        } catch {
+          try {
+            const text = await response.text();
+            if (text) message = text;
+          } catch {}
+        }
+        throw new Error(message);
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/slicer-profiles"] });
+      toast({
+        title: "Profiles Uploaded",
+        description: `Uploaded ${data.created || 0} profiles.`,
       });
       resetUploadForm();
     },
@@ -172,6 +310,8 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
 
   const resetUploadForm = () => {
     setShowUploadForm(false);
+    setIsEditing(false);
+    setEditingProfileId(null);
     setUploadName("");
     setUploadManufacturer("none");
     setUploadMaterial("none");
@@ -180,24 +320,126 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
     setUploadNotes("");
     setUploadIsPublic(false);
     setSelectedFile(null);
+    setSelectedFiles([]);
+    setUploadFilamentIds([]);
+    setFilamentPickerValue("select");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const getFirstString = (value: unknown): string | null => {
+    if (Array.isArray(value) && value.length > 0) {
+      const first = value[0];
+      return typeof first === "string" ? first : null;
+    }
+    return typeof value === "string" ? value : null;
+  };
+
+  const findListMatch = (value: string, list: { name: string }[]) => {
+    const normalized = value.trim().toLowerCase();
+    return list.find((item) => item.name.trim().toLowerCase() === normalized)?.name || null;
+  };
+
+  const ensureListItem = async (
+    value: string | null,
+    list: { name: string }[],
+    endpoint: string,
+    setValue: (next: string) => void,
+    label: string
+  ) => {
+    if (!value) return;
+    const existing = findListMatch(value, list);
+    if (existing) {
+      setValue(existing);
+      return;
+    }
+
+    try {
+      const created = await apiRequest<{ name: string }>(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ name: value.trim() }),
+      });
+      queryClient.invalidateQueries({ queryKey: [endpoint] });
+      setValue(created.name || value.trim());
+    } catch (error) {
+      toast({
+        title: "Auto-add failed",
+        description: `Could not add ${label} "${value}".`,
+        variant: "destructive",
+      });
+      setValue("none");
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    const file = files[0];
     if (file) {
+      setSelectedFiles(files);
       setSelectedFile(file);
+      if (files.length > 1) {
+        setUploadName("");
+        setUploadManufacturer("none");
+        setUploadMaterial("none");
+        setUploadPrinter("none");
+        setUploadSlicerVersion("none");
+        setUploadNotes("");
+        setUploadFilamentIds([]);
+        return;
+      }
       // Auto-fill name from filename if empty
       if (!uploadName) {
         const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
         setUploadName(nameWithoutExt);
       }
+
+      if (files.length === 1 && file.name.toLowerCase().endsWith(".json")) {
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text) as Record<string, unknown>;
+          const jsonName = getFirstString(parsed.name) || getFirstString(parsed.filament_settings_id);
+          if (jsonName && (!uploadName || uploadName === file.name.replace(/\.[^/.]+$/, ""))) {
+            setUploadName(jsonName);
+          }
+
+          const jsonNotes = getFirstString(parsed.filament_notes);
+          if (jsonNotes && !uploadNotes) {
+            setUploadNotes(jsonNotes);
+          }
+
+          const manufacturer =
+            getFirstString(parsed.filament_vendor) ||
+            getFirstString(parsed.manufacturer) ||
+            getFirstString(parsed.vendor);
+          const material =
+            getFirstString(parsed.filament_type) || getFirstString(parsed.material);
+          const printer = getFirstString(parsed.compatible_printers);
+
+          await ensureListItem(manufacturer, manufacturers, "/api/manufacturers", setUploadManufacturer, "manufacturer");
+          await ensureListItem(material, materials, "/api/materials", setUploadMaterial, "material");
+
+          if (printer) {
+            const matchedPrinter = findListMatch(printer, printers);
+            if (matchedPrinter) {
+              setUploadPrinter(matchedPrinter);
+            }
+          }
+        } catch (error) {
+          toast({
+            title: "Profile parsing failed",
+            description: "Could not read profile metadata from the JSON file.",
+            variant: "destructive",
+          });
+        }
+      }
     }
   };
 
   const handleUpload = () => {
+    if (selectedFiles.length > 1) {
+      return;
+    }
     if (!selectedFile || !uploadName) {
       toast({
         title: "Missing Information",
@@ -216,8 +458,52 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
     if (uploadSlicerVersion !== "none") formData.append("slicerVersion", uploadSlicerVersion);
     if (uploadNotes) formData.append("notes", uploadNotes);
     formData.append("isPublic", String(uploadIsPublic));
+    if (uploadFilamentIds.length > 0) {
+      formData.append("filamentIds", JSON.stringify(uploadFilamentIds));
+    }
 
     uploadMutation.mutate(formData);
+  };
+
+  const handleSaveProfile = () => {
+    const isBulk = selectedFiles.length > 1;
+    if (!uploadName && !isBulk) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide a profile name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isEditing && editingProfileId) {
+      updateMutation.mutate({
+        id: editingProfileId,
+        payload: {
+          name: uploadName,
+          manufacturer: uploadManufacturer !== "none" ? uploadManufacturer : null,
+          material: uploadMaterial !== "none" ? uploadMaterial : null,
+          printerModel: uploadPrinter !== "none" ? uploadPrinter : null,
+          slicerVersion: uploadSlicerVersion !== "none" ? uploadSlicerVersion : null,
+          notes: uploadNotes || null,
+          isPublic: uploadIsPublic,
+        },
+        filamentIds: uploadFilamentIds,
+      });
+      return;
+    }
+
+    if (isBulk) {
+      const formData = new FormData();
+      for (const file of selectedFiles) {
+        formData.append("files", file);
+      }
+      formData.append("isPublic", String(uploadIsPublic));
+      uploadBulkMutation.mutate(formData);
+      return;
+    }
+
+    handleUpload();
   };
 
   const handleDownload = async (profile: SlicerProfile) => {
@@ -244,6 +530,28 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
       });
     }
   };
+
+  const startEditProfile = async (profile: SlicerProfile) => {
+    setShowUploadForm(true);
+    setIsEditing(true);
+    setEditingProfileId(profile.id);
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setUploadName(profile.name || "");
+    setUploadManufacturer(profile.manufacturer || "none");
+    setUploadMaterial(profile.material || "none");
+    setUploadPrinter(profile.printerModel || "none");
+    setUploadSlicerVersion(profile.slicerVersion || "none");
+    setUploadNotes(profile.notes || "");
+    setUploadIsPublic(Boolean(profile.isPublic));
+    await loadProfileFilaments(profile.id);
+  };
+
+  const availableFilaments = filaments.filter(
+    (filament) => !uploadFilamentIds.includes(filament.id)
+  );
 
   const getFileIcon = (fileType: string | null) => {
     if (!fileType) return <File className="h-4 w-4" />;
@@ -277,6 +585,14 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
     }
     return true;
   });
+
+  useEffect(() => {
+    if (!open || !initialProfileId) return;
+    const profile = profiles.find((item) => item.id === initialProfileId);
+    if (profile) {
+      setSearchQuery(profile.name);
+    }
+  }, [open, initialProfileId, profiles]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -331,7 +647,13 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={() => setShowUploadForm(true)} size="sm">
+            <Button
+              onClick={() => {
+                resetUploadForm();
+                setShowUploadForm(true);
+              }}
+              size="sm"
+            >
               <Plus className="h-4 w-4 mr-1" />
               Upload Profile
             </Button>
@@ -346,15 +668,19 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Profile File *</Label>
+                    <Label>Profile File {isEditing ? "" : "*"}</Label>
                     <Input
                       ref={fileInputRef}
                       type="file"
                       accept=".json,.ini,.cfg,.3mf,.curaprofile,.fff,.factory,.slicer,.xml,.zip"
                       onChange={handleFileSelect}
+                      disabled={isEditing}
+                      multiple={!isEditing}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Supported: .json, .ini, .cfg, .3mf, .curaprofile, .fff, .xml, .zip
+                      {isEditing
+                        ? "File replacement is not supported yet."
+                        : "Supported: .json, .ini, .cfg, .3mf, .curaprofile, .fff, .xml, .zip. You can select multiple files."}
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -363,14 +689,24 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                       value={uploadName}
                       onChange={(e) => setUploadName(e.target.value)}
                       placeholder="e.g., PLA High Quality"
+                      disabled={isBulkUpload}
                     />
+                    {isBulkUpload && (
+                      <p className="text-xs text-muted-foreground">
+                        Bulk upload uses names from each JSON file.
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Manufacturer</Label>
-                    <Select value={uploadManufacturer} onValueChange={setUploadManufacturer}>
+                    <Select
+                      value={uploadManufacturer}
+                      onValueChange={setUploadManufacturer}
+                      disabled={isBulkUpload}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select manufacturer" />
                       </SelectTrigger>
@@ -386,7 +722,11 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                   </div>
                   <div className="space-y-2">
                     <Label>Material</Label>
-                    <Select value={uploadMaterial} onValueChange={setUploadMaterial}>
+                    <Select
+                      value={uploadMaterial}
+                      onValueChange={setUploadMaterial}
+                      disabled={isBulkUpload}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select material" />
                       </SelectTrigger>
@@ -405,7 +745,11 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Printer Model</Label>
-                    <Select value={uploadPrinter} onValueChange={setUploadPrinter}>
+                    <Select
+                      value={uploadPrinter}
+                      onValueChange={setUploadPrinter}
+                      disabled={isBulkUpload}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select printer" />
                       </SelectTrigger>
@@ -421,7 +765,11 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                   </div>
                   <div className="space-y-2">
                     <Label>Slicer Version</Label>
-                    <Select value={uploadSlicerVersion} onValueChange={setUploadSlicerVersion}>
+                    <Select
+                      value={uploadSlicerVersion}
+                      onValueChange={setUploadSlicerVersion}
+                      disabled={isBulkUpload}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select slicer" />
                       </SelectTrigger>
@@ -444,7 +792,72 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                     onChange={(e) => setUploadNotes(e.target.value)}
                     placeholder="Any additional notes about this profile..."
                     rows={2}
+                    disabled={isBulkUpload}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Linked Filaments</Label>
+                  {isBulkUpload && (
+                    <p className="text-xs text-muted-foreground">
+                      Bulk upload skips filament linking. You can link profiles after upload.
+                    </p>
+                  )}
+                  {uploadFilamentIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {uploadFilamentIds.map((id) => {
+                        const filament = filaments.find((item) => item.id === id);
+                        if (!filament) return null;
+                        return (
+                          <Badge key={id} variant="secondary" className="flex items-center gap-1">
+                            <span className="max-w-[200px] truncate">
+                              {filament.name}
+                            </span>
+                            <button
+                              type="button"
+                              className="ml-1 text-muted-foreground hover:text-foreground"
+                              title="Remove filament"
+                              aria-label="Remove filament"
+                              onClick={() =>
+                                setUploadFilamentIds((prev) => prev.filter((item) => item !== id))
+                              }
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <Select
+                    value={filamentPickerValue}
+                    onValueChange={(value) => {
+                      setFilamentPickerValue(value);
+                      if (value === "select") return;
+                      const id = parseInt(value, 10);
+                      if (!isNaN(id)) {
+                        setUploadFilamentIds((prev) =>
+                          prev.includes(id) ? prev : [...prev, id]
+                        );
+                      }
+                      setFilamentPickerValue("select");
+                    }}
+                    disabled={isBulkUpload}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Add filament" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="select">Add filament</SelectItem>
+                      {availableFilaments.map((filament) => (
+                        <SelectItem key={filament.id} value={String(filament.id)}>
+                          {filament.name}
+                          {filament.manufacturer ? ` • ${filament.manufacturer}` : ""}
+                          {filament.material ? ` • ${filament.material}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -466,10 +879,19 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                   <Button variant="outline" onClick={resetUploadForm}>
                     Cancel
                   </Button>
-                  <Button onClick={handleUpload} disabled={uploadMutation.isPending}>
-                    {uploadMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                  <Button
+                    onClick={handleSaveProfile}
+                    disabled={uploadMutation.isPending || updateMutation.isPending}
+                  >
+                    {(uploadMutation.isPending || updateMutation.isPending) && (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    )}
                     <Upload className="h-4 w-4 mr-1" />
-                    Upload
+                    {isEditing
+                      ? "Save"
+                      : isBulkUpload
+                        ? `Upload ${selectedFiles.length}`
+                        : "Upload"}
                   </Button>
                 </div>
               </CardContent>
@@ -557,7 +979,7 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                             )}
                           </div>
 
-                          <div className="flex gap-1">
+                            <div className="flex gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -566,6 +988,14 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                             >
                               <Download className="h-4 w-4" />
                             </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => startEditProfile(profile)}
+                                title="Edit"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
                             <Button
                               variant="ghost"
                               size="icon"

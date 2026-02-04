@@ -56,6 +56,7 @@ Identify the manufacturer from:
 3. **Handwritten labels** - READ any handwritten text carefully, people often write brand, material, and color
 
 **IMPORTANT**: If you see a BLACK spool with many small holes, it's likely SUNLU not Bambu Lab. Bambu Lab spools are GRAY/WHITE.
+**IMPORTANT**: Refill spools (no plastic spool, just filament wound on a cardboard core) are ALWAYS Bambu Lab. If you see "BL" handwritten or marked on foil-wrapped spools, treat the manufacturer as Bambu Lab.
 
 ## COLOR IDENTIFICATION  
 Determine the filament color from:

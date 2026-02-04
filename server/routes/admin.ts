@@ -16,6 +16,7 @@ import {
   filamentHistory,
   materialCompatibility,
   slicerProfiles,
+  filamentSlicerProfiles,
   cloudBackupConfigs,
   backupHistory,
 } from "../../shared/schema";
@@ -45,6 +46,7 @@ export function registerAdminRoutes(app: Express): void {
       // Delete dependent tables first
       await db.delete(filamentHistory);
       await db.delete(printJobs);
+      await db.delete(filamentSlicerProfiles);
       await db.delete(slicerProfiles);
       await db.delete(userSharing);
       await db.delete(cloudBackupConfigs);
@@ -152,21 +154,21 @@ export function registerAdminRoutes(app: Express): void {
 
       // Seed storage locations
       const defaultStorageLocations = [
-        { name: "A - Bedroom Shelf", description: "2 shelves: top has 3 rows x 5 high, bottom has 2 rows x 10", capacity: 45 },
-        { name: "B - Sealable Storage", description: "1 row deep, 2 rows high, 6 spools each", capacity: 12 },
-        { name: "C - Sealable Zip-up", description: "2 rows deep, 2 high, 6 spools each", capacity: 24 },
-        { name: "D - Sealable Zip-up", description: "2 rows deep, 2 high, 6 spools each", capacity: 24 },
-        { name: "E - Rod Above Printer", description: "1 row, 8 spools", capacity: 8 },
-        { name: "F - 9-Level Rack", description: "9 rows high, 6 spools each (1 row for mini spools)", capacity: 81 },
-        { name: "AMS HT - H2C 1", description: "AMS HT unit connected to H2C, acts as dryer", capacity: 1 },
-        { name: "AMS HT - H2C 2", description: "AMS HT unit connected to H2C, acts as dryer", capacity: 1 },
-        { name: "AMS HT - P2S", description: "AMS HT unit connected to P2S, acts as dryer", capacity: 1 },
-        { name: "AMS Pro 2 - H2C 1", description: "AMS Pro 2 unit connected to H2C, acts as dryer", capacity: 4 },
-        { name: "AMS Pro 2 - H2C 2", description: "AMS Pro 2 unit connected to H2C, acts as dryer", capacity: 4 },
-        { name: "AMS Pro 2 - P2S", description: "AMS Pro 2 unit connected to P2S, acts as dryer", capacity: 4 },
-        { name: "FLSUN S1 Pro", description: "Spool attached to FLSUN S1 Pro printer, acts as dryer", capacity: 1 },
-        { name: "Creality Dryer", description: "Creality dryer unit, holds up to 2 spools", capacity: 2 },
-        { name: "Polymaker Dryer", description: "Polymaker dryer unit, holds 1 spool", capacity: 1 },
+        { name: "A - Bedroom Shelf", description: "2 shelves: top has 3 rows x 5 high, bottom has 2 rows x 10", capacity: 45, sortOrder: 1 },
+        { name: "B - Sealable Zip Up Small", description: "1 row deep, 2 high, 4 spools each", capacity: 8, sortOrder: 2 },
+        { name: "C - Sealable Zip Up Large 1", description: "2 rows deep, 2 high, 6 spools each", capacity: 24, sortOrder: 3 },
+        { name: "D - Sealable Zip Up Large 2", description: "2 rows deep, 2 high, 6 spools each", capacity: 24, sortOrder: 4 },
+        { name: "E - Rod Above Printer", description: "1 row, 8 spools", capacity: 8, sortOrder: 5 },
+        { name: "F - 9-Level Rack", description: "9 rows high, 6 spools each (1 row for mini spools)", capacity: 81, sortOrder: 6 },
+        { name: "AMS Pro 2 - H2C 1", description: "AMS Pro 2 unit connected to H2C, acts as dryer", capacity: 4, sortOrder: 7 },
+        { name: "AMS Pro 2 - H2C 2", description: "AMS Pro 2 unit connected to H2C, acts as dryer", capacity: 4, sortOrder: 8 },
+        { name: "AMS Pro 2 - P2S", description: "AMS Pro 2 unit connected to P2S, acts as dryer", capacity: 4, sortOrder: 9 },
+        { name: "AMS HT - H2C 1", description: "AMS HT unit connected to H2C, acts as dryer", capacity: 1, sortOrder: 10 },
+        { name: "AMS HT - H2C 2", description: "AMS HT unit connected to H2C, acts as dryer", capacity: 1, sortOrder: 11 },
+        { name: "AMS HT - P2S", description: "AMS HT unit connected to P2S, acts as dryer", capacity: 1, sortOrder: 12 },
+        { name: "FLSUN S1 Pro", description: "Spool attached to FLSUN S1 Pro printer, acts as dryer", capacity: 1, sortOrder: 14 },
+        { name: "Creality Dryer", description: "Creality dryer unit, holds up to 2 spools", capacity: 2, sortOrder: 15 },
+        { name: "Polymaker Dryer", description: "Polymaker dryer unit, holds 1 spool", capacity: 1, sortOrder: 16 },
       ];
       for (const location of defaultStorageLocations) {
         await db.insert(storageLocations).values(location).onConflictDoNothing();

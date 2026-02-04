@@ -27,8 +27,9 @@ fi
 # Backup database (includes all tables)
 echo "💾 Backing up database..."
 echo "   Tables: users, filaments, print_jobs, filament_history, slicer_profiles,"
-echo "           material_compatibility, user_sharing, manufacturers, materials,"
-echo "           colors, diameters, storage_locations, backup_history"
+echo "           filament_slicer_profiles, material_compatibility, user_sharing,"
+echo "           manufacturers, materials, colors, diameters, storage_locations,"
+echo "           backup_history"
 docker exec filadex-db-1 pg_dump -U filadex -d filadex > "${BACKUP_PATH}/database.sql"
 DB_SIZE=$(wc -c < "${BACKUP_PATH}/database.sql" | tr -d ' ')
 echo "   ✅ Database backup: $(numfmt --to=iec-i --suffix=B $DB_SIZE 2>/dev/null || echo "${DB_SIZE} bytes")"

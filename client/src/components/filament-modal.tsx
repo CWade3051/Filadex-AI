@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useTranslation } from "@/i18n";
+import { Badge } from "@/components/ui/badge";
+import { SlicerProfiles } from "@/components/slicer-profiles";
 
 // Material types will be created with translations in the component
 const createMaterialTypes = (t: (key: string) => string) => [
@@ -246,6 +248,13 @@ interface Material {
   createdAt: string;
 }
 
+interface SlicerProfileListItem {
+  id: number;
+  name: string;
+  manufacturer?: string | null;
+  material?: string | null;
+}
+
 export function FilamentModal({
   isOpen,
   onClose,
@@ -260,6 +269,8 @@ export function FilamentModal({
   const [customWeightVisible, setCustomWeightVisible] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showNFCScanner, setShowNFCScanner] = useState(false);
+  const [selectedSlicerProfileIds, setSelectedSlicerProfileIds] = useState<number[]>([]);
+  const [slicerProfilePickerValue, setSlicerProfilePickerValue] = useState("select");
   
   // Image preview state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -268,6 +279,8 @@ export function FilamentModal({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const imageContainerRef = useRef<HTMLDivElement>(null);
+  const [slicerProfilesOpen, setSlicerProfilesOpen] = useState(false);
+  const [focusedProfileId, setFocusedProfileId] = useState<number | null>(null);
 
   // Create form schema with translations
   const formSchema = createFormSchema(t);
@@ -309,6 +322,23 @@ export function FilamentModal({
     queryFn: () => apiRequest<{id: number, name: string}[]>('/api/storage-locations'),
     enabled: isOpen
   });
+
+  const { data: slicerProfiles = [] } = useQuery({
+    queryKey: ['/api/slicer-profiles'],
+    queryFn: () => apiRequest<SlicerProfileListItem[]>('/api/slicer-profiles'),
+    enabled: isOpen
+  });
+
+  const { data: filamentSlicerProfiles = [] } = useQuery({
+    queryKey: [`/api/filaments/${filament?.id}/slicer-profiles`],
+    queryFn: () =>
+      apiRequest<SlicerProfileListItem[]>(`/api/filaments/${filament?.id}/slicer-profiles`),
+    enabled: isOpen && Boolean(filament?.id)
+  });
+
+  const availableSlicerProfiles = slicerProfiles.filter(
+    (profile) => !selectedSlicerProfileIds.includes(profile.id)
+  );
 
   // Extract storage location names
   const storageLocations = storageLocationData.map(loc => loc.name);
@@ -399,6 +429,15 @@ export function FilamentModal({
     }
   }, [filament, form]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    if (filament?.id) {
+      setSelectedSlicerProfileIds(filamentSlicerProfiles.map((profile) => profile.id));
+    } else {
+      setSelectedSlicerProfileIds([]);
+    }
+  }, [isOpen, filament?.id, filamentSlicerProfiles]);
+
   // Handle form submission
   const onSubmit = (data: FormValues) => {
     // Handle custom weight
@@ -406,7 +445,7 @@ export function FilamentModal({
       data.totalWeight = totalWeight;
     }
 
-    onSave(data);
+    onSave({ ...data, slicerProfileIds: selectedSlicerProfileIds });
   };
 
   // Helper to calculate remaining weight
@@ -1224,6 +1263,72 @@ export function FilamentModal({
                 </div>
               </div>
 
+            {/* Slicer Profiles Section */}
+            <div className="border rounded-md p-4 dark:bg-neutral-900 bg-gray-50 dark:border-neutral-700 border-gray-200">
+              <h4 className="font-medium dark:text-neutral-400 text-gray-700 mb-3">Slicer Profiles</h4>
+              {selectedSlicerProfileIds.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {selectedSlicerProfileIds.map((id) => {
+                    const profile = slicerProfiles.find((item) => item.id === id);
+                    if (!profile) return null;
+                    return (
+                      <Badge key={id} variant="secondary" className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="truncate"
+                          onClick={() => {
+                            setFocusedProfileId(id);
+                            setSlicerProfilesOpen(true);
+                          }}
+                        >
+                          {profile.name}
+                        </button>
+                        <button
+                          type="button"
+                          className="ml-1 text-muted-foreground hover:text-foreground"
+                          title="Remove profile"
+                          aria-label="Remove profile"
+                          onClick={() =>
+                            setSelectedSlicerProfileIds((prev) => prev.filter((item) => item !== id))
+                          }
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+              <Select
+                value={slicerProfilePickerValue}
+                onValueChange={(value) => {
+                  setSlicerProfilePickerValue(value);
+                  if (value === "select") return;
+                  const id = parseInt(value, 10);
+                  if (!isNaN(id)) {
+                    setSelectedSlicerProfileIds((prev) =>
+                      prev.includes(id) ? prev : [...prev, id]
+                    );
+                  }
+                  setSlicerProfilePickerValue("select");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Add slicer profile" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="select">Add slicer profile</SelectItem>
+                  {availableSlicerProfiles.map((profile) => (
+                    <SelectItem key={profile.id} value={String(profile.id)}>
+                      {profile.name}
+                      {profile.manufacturer ? ` • ${profile.manufacturer}` : ""}
+                      {profile.material ? ` • ${profile.material}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
               {/* Notes Section */}
               <div className="border rounded-md p-4 dark:bg-neutral-900 bg-gray-50 dark:border-neutral-700 border-gray-200">
                 <h4 className="font-medium dark:text-neutral-400 text-gray-700 mb-3">{t('ai.addNotes')}</h4>
@@ -1403,6 +1508,11 @@ export function FilamentModal({
           </div>
         </DialogContent>
       </Dialog>
+      <SlicerProfiles
+        open={slicerProfilesOpen}
+        onOpenChange={setSlicerProfilesOpen}
+        initialProfileId={focusedProfileId}
+      />
     </>
   );
 }

@@ -68,8 +68,9 @@ EXTRACTED_DIR=$(ls "$TEMP_DIR")
 # Restore database
 echo "💾 Restoring database..."
 echo "   Tables: users, filaments, print_jobs, filament_history, slicer_profiles,"
-echo "           material_compatibility, user_sharing, manufacturers, materials,"
-echo "           colors, diameters, storage_locations, backup_history"
+echo "           filament_slicer_profiles, material_compatibility, user_sharing,"
+echo "           manufacturers, materials, colors, diameters, storage_locations,"
+echo "           backup_history"
 docker exec -i filadex-db-1 psql -U filadex -d filadex -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" > /dev/null 2>&1
 docker exec -i filadex-db-1 psql -U filadex -d filadex < "${TEMP_DIR}/${EXTRACTED_DIR}/database.sql" > /dev/null 2>&1
 echo "   ✅ Database restored"

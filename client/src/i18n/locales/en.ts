@@ -564,6 +564,11 @@ const translations = {
       deleteAllSuccess: 'Storage locations deleted',
       deleteAllSuccessDescription: 'All storage locations were successfully deleted.',
       deleteAllError: 'Not all storage locations could be deleted. Please try again.',
+      actions: 'Actions',
+      populateDefaults: 'Populate Default Storage Locations',
+      populateDefaultsSuccess: 'Defaults populated',
+      populateDefaultsSuccessDescription: 'Default storage locations were added.',
+      populateDefaultsError: 'Failed to populate default storage locations.',
       importExport: 'Storage Location Import/Export',
     },
     printers: {

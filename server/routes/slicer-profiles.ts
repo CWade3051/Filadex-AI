@@ -9,6 +9,26 @@ import { logger as appLogger } from "../utils/logger";
 // Configure multer for slicer profile uploads
 const profilesDir = path.join(process.cwd(), "uploads", "profiles");
 
+const parseIdList = (value: unknown): number[] => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => parseInt(String(entry), 10)).filter((id) => !isNaN(id));
+  }
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((entry) => parseInt(String(entry), 10)).filter((id) => !isNaN(id));
+      }
+    } catch {
+      return value
+        .split(",")
+        .map((entry) => parseInt(entry.trim(), 10))
+        .filter((id) => !isNaN(id));
+    }
+  }
+  return [];
+};
+
 // Ensure profiles directory exists
 if (!fs.existsSync(profilesDir)) {
   fs.mkdirSync(profilesDir, { recursive: true });
@@ -54,6 +74,33 @@ const uploadProfile = multer({
 });
 
 // Parse slicer profile settings based on file type
+function getFirstString(value: unknown): string | null {
+  if (Array.isArray(value) && value.length > 0) {
+    const first = value[0];
+    return typeof first === "string" ? first : null;
+  }
+  return typeof value === "string" ? value : null;
+}
+
+function parseJsonMetadata(content: string) {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    return {
+      name: getFirstString(parsed.name) || getFirstString(parsed.filament_settings_id),
+      manufacturer:
+        getFirstString(parsed.filament_vendor) ||
+        getFirstString(parsed.manufacturer) ||
+        getFirstString(parsed.vendor),
+      material: getFirstString(parsed.filament_type) || getFirstString(parsed.material),
+      printerModel: getFirstString(parsed.compatible_printers),
+      notes: getFirstString(parsed.filament_notes),
+      slicerVersion: getFirstString(parsed.version),
+    };
+  } catch {
+    return {};
+  }
+}
+
 function parseProfileSettings(filePath: string, fileType: string): any {
   try {
     const content = fs.readFileSync(filePath, "utf8");
@@ -182,7 +229,7 @@ export function registerSlicerProfileRoutes(app: Express) {
           return res.status(400).json({ message: "No file uploaded" });
         }
 
-        const { name, manufacturer, material, printerModel, slicerVersion, notes, isPublic } =
+        const { name, manufacturer, material, printerModel, slicerVersion, notes, isPublic, filamentIds } =
           req.body;
 
         if (!name) {
@@ -193,21 +240,46 @@ export function registerSlicerProfileRoutes(app: Express) {
 
         const fileType = path.extname(req.file.originalname).toLowerCase();
         const parsedSettings = parseProfileSettings(req.file.path, fileType);
+        const rawProfile = fileType === ".json" ? fs.readFileSync(req.file.path, "utf8") : null;
+        const jsonMetadata = rawProfile ? parseJsonMetadata(rawProfile) : {};
+
+        const manufacturers = await storage.getManufacturers();
+        const materials = await storage.getMaterials();
+
+        const finalManufacturer = manufacturer || jsonMetadata.manufacturer || null;
+        if (finalManufacturer && !manufacturers.some((m) => m.name.toLowerCase() === finalManufacturer.toLowerCase())) {
+          await storage.createManufacturer({ name: finalManufacturer });
+        }
+
+        const finalMaterial = material || jsonMetadata.material || null;
+        if (finalMaterial && !materials.some((m) => m.name.toLowerCase() === finalMaterial.toLowerCase())) {
+          await storage.createMaterial({ name: finalMaterial });
+        }
 
         const profile = await storage.createSlicerProfile({
           userId: req.userId!,
-          name,
-          manufacturer: manufacturer || null,
-          material: material || null,
+          name: name || jsonMetadata.name || req.file.originalname,
+          manufacturer: finalManufacturer,
+          material: finalMaterial,
           fileUrl: `/uploads/profiles/${req.file.filename}`,
           originalFilename: req.file.originalname,
           fileType,
           parsedSettings: JSON.stringify(parsedSettings),
-          slicerVersion: slicerVersion || null,
-          printerModel: printerModel || null,
-          notes: notes || null,
+          rawProfile,
+          slicerVersion: slicerVersion || jsonMetadata.slicerVersion || null,
+          printerModel: printerModel || jsonMetadata.printerModel || null,
+          notes: notes || jsonMetadata.notes || null,
           isPublic: isPublic === "true" || isPublic === true,
         });
+
+        const requestedFilamentIds = parseIdList(filamentIds);
+        if (requestedFilamentIds.length > 0) {
+          const userFilaments = await storage.getFilaments(req.userId!);
+          const validFilamentIds = requestedFilamentIds.filter((id) =>
+            userFilaments.some((filament) => filament.id === id)
+          );
+          await storage.setSlicerProfileFilaments(profile.id, validFilamentIds);
+        }
 
         res.status(201).json(profile);
       } catch (error) {
@@ -222,6 +294,129 @@ export function registerSlicerProfileRoutes(app: Express) {
       }
     }
   );
+
+  // Bulk upload profiles
+  app.post(
+    "/api/slicer-profiles/bulk",
+    authenticate,
+    uploadProfile.array("files"),
+    async (req: Request, res: Response) => {
+      try {
+        const files = req.files as Express.Multer.File[] | undefined;
+        if (!files || files.length === 0) {
+          return res.status(400).json({ message: "No files uploaded" });
+        }
+
+        const isPublic = req.body.isPublic === "true" || req.body.isPublic === true;
+        const results: { created: number; errors: number; messages: string[] } = {
+          created: 0,
+          errors: 0,
+          messages: [],
+        };
+
+        const manufacturers = await storage.getManufacturers();
+        const materials = await storage.getMaterials();
+
+        for (const file of files) {
+          try {
+            const fileType = path.extname(file.originalname).toLowerCase();
+            const rawProfile = fileType === ".json" ? fs.readFileSync(file.path, "utf8") : null;
+            const parsedSettings = parseProfileSettings(file.path, fileType);
+            const jsonMetadata = rawProfile ? parseJsonMetadata(rawProfile) : {};
+
+            const finalManufacturer = jsonMetadata.manufacturer || null;
+            if (
+              finalManufacturer &&
+              !manufacturers.some((m) => m.name.toLowerCase() === finalManufacturer.toLowerCase())
+            ) {
+              const created = await storage.createManufacturer({ name: finalManufacturer });
+              manufacturers.push(created);
+            }
+
+            const finalMaterial = jsonMetadata.material || null;
+            if (finalMaterial && !materials.some((m) => m.name.toLowerCase() === finalMaterial.toLowerCase())) {
+              const created = await storage.createMaterial({ name: finalMaterial });
+              materials.push(created);
+            }
+
+            await storage.createSlicerProfile({
+              userId: req.userId!,
+              name: jsonMetadata.name || file.originalname,
+              manufacturer: finalManufacturer,
+              material: finalMaterial,
+              fileUrl: `/uploads/profiles/${file.filename}`,
+              originalFilename: file.originalname,
+              fileType,
+              parsedSettings: JSON.stringify(parsedSettings),
+              rawProfile,
+              slicerVersion: jsonMetadata.slicerVersion || null,
+              printerModel: jsonMetadata.printerModel || null,
+              notes: jsonMetadata.notes || null,
+              isPublic,
+            });
+
+            results.created++;
+          } catch (error) {
+            results.errors++;
+            results.messages.push(`Failed to import ${file.originalname}`);
+            appLogger.error("Error bulk uploading slicer profile:", error);
+          }
+        }
+
+        res.status(201).json(results);
+      } catch (error) {
+        appLogger.error("Error bulk uploading slicer profiles:", error);
+        res.status(500).json({ message: "Failed to bulk upload slicer profiles" });
+      }
+    }
+  );
+
+  // Get filaments linked to a slicer profile
+  app.get("/api/slicer-profiles/:id/filaments", authenticate, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid profile ID" });
+      }
+
+      const profile = await storage.getSlicerProfile(id, req.userId!);
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      const filaments = await storage.getFilamentsForSlicerProfile(req.userId!, id);
+      res.json(filaments);
+    } catch (error) {
+      appLogger.error("Error fetching slicer profile filaments:", error);
+      res.status(500).json({ message: "Failed to fetch profile filaments" });
+    }
+  });
+
+  // Update filaments linked to a slicer profile
+  app.put("/api/slicer-profiles/:id/filaments", authenticate, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid profile ID" });
+      }
+
+      const profile = await storage.getSlicerProfile(id, req.userId!);
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      const requestedFilamentIds = parseIdList(req.body.filamentIds);
+      const userFilaments = await storage.getFilaments(req.userId!);
+      const validFilamentIds = requestedFilamentIds.filter((filamentId) =>
+        userFilaments.some((filament) => filament.id === filamentId)
+      );
+      await storage.setSlicerProfileFilaments(id, validFilamentIds);
+      res.json({ success: true });
+    } catch (error) {
+      appLogger.error("Error updating slicer profile filaments:", error);
+      res.status(500).json({ message: "Failed to update profile filaments" });
+    }
+  });
 
   // Update a profile
   app.patch("/api/slicer-profiles/:id", authenticate, async (req: Request, res: Response) => {

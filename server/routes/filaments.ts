@@ -11,6 +11,26 @@ import { validateBatchIds } from "../utils/batch-operations";
 import fs from "fs";
 import path from "path";
 
+const parseIdList = (value: unknown): number[] => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => parseInt(String(entry), 10)).filter((id) => !isNaN(id));
+  }
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((entry) => parseInt(String(entry), 10)).filter((id) => !isNaN(id));
+      }
+    } catch {
+      return value
+        .split(",")
+        .map((entry) => parseInt(entry.trim(), 10))
+        .filter((id) => !isNaN(id));
+    }
+  }
+  return [];
+};
+
 export function registerFilamentRoutes(app: Express): void {
   // GET all filaments with optional export
   app.get("/api/filaments", authenticate, async (req, res) => {
@@ -356,6 +376,17 @@ export function registerFilamentRoutes(app: Express): void {
       };
 
       const newFilament = await storage.createFilament(insertData);
+      const slicerProfileIds = parseIdList(data.slicerProfileIds);
+      if (slicerProfileIds.length > 0) {
+        const userProfiles = await storage.getSlicerProfiles(req.userId);
+        const publicProfiles = await storage.getPublicSlicerProfiles();
+        const allowedProfileIds = new Set([
+          ...userProfiles.map((profile) => profile.id),
+          ...publicProfiles.map((profile) => profile.id),
+        ]);
+        const validProfileIds = slicerProfileIds.filter((id) => allowedProfileIds.has(id));
+        await storage.setFilamentSlicerProfiles(newFilament.id, validProfileIds);
+      }
       res.status(201).json(newFilament);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -408,6 +439,18 @@ export function registerFilamentRoutes(app: Express): void {
         return res.status(404).json({ message: "Filament not found" });
       }
 
+      if (data.slicerProfileIds !== undefined) {
+        const slicerProfileIds = parseIdList(data.slicerProfileIds);
+        const userProfiles = await storage.getSlicerProfiles(req.userId);
+        const publicProfiles = await storage.getPublicSlicerProfiles();
+        const allowedProfileIds = new Set([
+          ...userProfiles.map((profile) => profile.id),
+          ...publicProfiles.map((profile) => profile.id),
+        ]);
+        const validProfileIds = slicerProfileIds.filter((profileId) => allowedProfileIds.has(profileId));
+        await storage.setFilamentSlicerProfiles(id, validProfileIds);
+      }
+
       res.json(updatedFilament);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -417,6 +460,49 @@ export function registerFilamentRoutes(app: Express): void {
       }
       appLogger.error("Error updating filament:", error);
       res.status(500).json({ message: "Failed to update filament" });
+    }
+  });
+
+  // GET slicer profiles linked to a filament
+  app.get("/api/filaments/:id/slicer-profiles", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid filament ID" });
+      }
+
+      const filament = await storage.getFilament(id, req.userId);
+      if (!filament) {
+        return res.status(404).json({ message: "Filament not found" });
+      }
+
+      const profiles = await storage.getSlicerProfilesForFilament(req.userId, id);
+      res.json(profiles);
+    } catch (error) {
+      appLogger.error("Error fetching filament slicer profiles:", error);
+      res.status(500).json({ message: "Failed to fetch filament slicer profiles" });
+    }
+  });
+
+  // Update slicer profiles linked to a filament
+  app.put("/api/filaments/:id/slicer-profiles", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid filament ID" });
+      }
+
+      const filament = await storage.getFilament(id, req.userId);
+      if (!filament) {
+        return res.status(404).json({ message: "Filament not found" });
+      }
+
+      const slicerProfileIds = parseIdList(req.body.slicerProfileIds);
+      await storage.setFilamentSlicerProfiles(id, slicerProfileIds);
+      res.json({ success: true });
+    } catch (error) {
+      appLogger.error("Error updating filament slicer profiles:", error);
+      res.status(500).json({ message: "Failed to update filament slicer profiles" });
     }
   });
 
