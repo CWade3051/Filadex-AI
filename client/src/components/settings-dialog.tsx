@@ -145,8 +145,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[85vw] lg:max-w-5xl xl:max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 m-2 sm:m-4"
+        <DialogContent
+        className="max-w-[96vw] sm:max-w-[92vw] md:max-w-[88vw] lg:max-w-6xl xl:max-w-7xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 m-2 sm:m-4"
         aria-describedby="settings-description"
       >
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
@@ -159,18 +159,18 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
         <Tabs defaultValue="manufacturers" value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="px-4 sm:px-6 pb-3 flex-shrink-0 overflow-x-auto overflow-y-hidden -mx-4 sm:-mx-6 scrollbar-hide">
             <div className="min-w-max inline-block px-4 sm:px-6">
-              <TabsList className="mb-0 w-full inline-flex min-w-max">
-                <TabsTrigger value="manufacturers" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.manufacturers.title')}</TabsTrigger>
-                <TabsTrigger value="materials" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.materials.title')}</TabsTrigger>
-                <TabsTrigger value="colors" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.colors.title')}</TabsTrigger>
-                <TabsTrigger value="diameters" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.diameters.title')}</TabsTrigger>
-                <TabsTrigger value="storage-locations" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.storageLocations.title')}</TabsTrigger>
-                <TabsTrigger value="printers" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.printers.title')}</TabsTrigger>
-                <TabsTrigger value="slicers" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.slicers.title')}</TabsTrigger>
-                <TabsTrigger value="units" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.units.title')}</TabsTrigger>
-                <TabsTrigger value="ai" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('apiKey.title')}</TabsTrigger>
-                <TabsTrigger value="filament-import-export" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">{t('settings.filamentImportExport.title')}</TabsTrigger>
-                <TabsTrigger value="data" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0">
+              <TabsList className="mb-0 w-full inline-flex min-w-max p-0.5">
+                <TabsTrigger value="manufacturers" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.manufacturers.title')}</TabsTrigger>
+                <TabsTrigger value="materials" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.materials.title')}</TabsTrigger>
+                <TabsTrigger value="colors" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.colors.title')}</TabsTrigger>
+                <TabsTrigger value="diameters" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.diameters.title')}</TabsTrigger>
+                <TabsTrigger value="storage-locations" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.storageLocations.title')}</TabsTrigger>
+                <TabsTrigger value="printers" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.printers.title')}</TabsTrigger>
+                <TabsTrigger value="slicers" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.slicers.title')}</TabsTrigger>
+                <TabsTrigger value="units" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.units.title')}</TabsTrigger>
+                <TabsTrigger value="ai" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('apiKey.title')}</TabsTrigger>
+                <TabsTrigger value="filament-import-export" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5">{t('settings.filamentImportExport.title')}</TabsTrigger>
+                <TabsTrigger value="data" className="text-xs sm:text-sm whitespace-nowrap flex-shrink-0 px-2 sm:px-2.5 mr-2 sm:mr-3">
                   <Database className="h-4 w-4 mr-1" />
                   Data
                 </TabsTrigger>

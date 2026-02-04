@@ -382,6 +382,7 @@ const translations = {
       deleteAllSuccess: 'Manufacturers deleted',
       deleteAllSuccessDescription: 'All manufacturers were successfully deleted.',
       deleteAllError: 'Not all manufacturers could be deleted. Please try again.',
+      actions: 'Actions',
       importExport: 'Manufacturer Import/Export',
     },
     materials: {

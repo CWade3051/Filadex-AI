@@ -363,6 +363,7 @@ const translations = {
       deleteAllSuccess: 'Hersteller gelöscht',
       deleteAllSuccessDescription: 'Alle Hersteller wurden erfolgreich gelöscht.',
       deleteAllError: 'Nicht alle Hersteller konnten gelöscht werden. Bitte versuchen Sie es erneut.',
+      actions: 'Aktionen',
       importExport: 'Hersteller Import/Export',
     },
     materials: {

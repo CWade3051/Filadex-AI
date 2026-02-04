@@ -282,7 +282,7 @@ Polymaker
                     <TableRow>
                       <TableHead className="w-10"></TableHead>
                       <TableHead className="w-[65%]">Name</TableHead>
-                      <TableHead className="text-right w-16">Aktionen</TableHead>
+                      <TableHead className="text-right w-16">{t('settings.manufacturers.actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <DragDropContext onDragEnd={handleDragEnd}>
