@@ -53,6 +53,8 @@ interface ExtractedFilamentData {
   printTemp?: string;
   printSpeed?: string;
   totalWeight?: number;
+  remainingPercentage?: number;
+  scaleGrams?: number;
   bedTemp?: string;
   isSealed?: boolean;
   notes?: string; // AI-generated notes (e.g., alternative print settings)
@@ -240,9 +242,66 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     }
   }, [isProcessing, processingProgress, pendingPhotoCount]);
 
+  const deleteUploadSession = async (token: string) => {
+    try {
+      await fetch(`/api/ai/upload-session/${token}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch (e) {
+      console.error("Failed to delete upload session:", e);
+    }
+  };
+
+  const resetReviewState = () => {
+    if (mobileSession?.token) {
+      deleteUploadSession(mobileSession.token);
+    }
+    setProcessedImages([]);
+    setSelectedFiles([]);
+    setPendingPhotoCount(0);
+    setProcessingProgress({ current: 0, total: 0 });
+    setIsProcessing(false);
+    setActiveTab("upload");
+    setIsPolling(false);
+    setMobileSession(null);
+
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    if (processingPollingRef.current) {
+      clearInterval(processingPollingRef.current);
+      processingPollingRef.current = null;
+    }
+
+    detectedUploadUrlsRef.current.clear();
+    importedUrlsRef.current.clear();
+
+    try {
+      localStorage.removeItem('filadex_pending_imports');
+      localStorage.removeItem('filadex_processing_state');
+      localStorage.removeItem('filadex_mobile_session');
+      localStorage.removeItem('filadex_imported_urls');
+    } catch (e) {
+      console.error('Failed to clear import state:', e);
+    }
+  };
+
   // Function to delete an item from review
   const handleDeleteFromReview = (index: number) => {
-    setProcessedImages(prev => prev.filter((_, i) => i !== index));
+    setProcessedImages(prev => {
+      const target = prev[index];
+      if (target?.imageUrl) {
+        importedUrlsRef.current.add(target.imageUrl);
+        try {
+          localStorage.setItem('filadex_imported_urls', JSON.stringify([...importedUrlsRef.current]));
+        } catch (e) {
+          console.error('Failed to save imported URLs:', e);
+        }
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
   
   // Image preview state
@@ -430,18 +489,25 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       return response.json();
     },
     onSuccess: (data) => {
-      const processed: ProcessedImage[] = data.results.map((result: any) => ({
-        imageUrl: result.imageUrl,
-        originalName: result.originalName,
-        extractedData: result.extractedData,
-        error: result.error,
-        selected: !result.error && result.extractedData?.confidence > 0.3,
-        notes: result.extractedData?.notes || "", // Use AI-extracted notes (e.g., alternative print settings)
-        storageLocation: "",
-        status: result.extractedData?.isSealed !== false ? "sealed" : "opened",
-        remainingPercentage: 100,
-        lastDryingDate: "",
-      }));
+      const processed: ProcessedImage[] = data.results.map((result: any) => {
+        const aiRemaining = Number(result.extractedData?.remainingPercentage);
+        const remainingPercentage = Number.isFinite(aiRemaining)
+          ? Math.max(0, Math.min(100, Math.round(aiRemaining)))
+          : 100;
+
+        return {
+          imageUrl: result.imageUrl,
+          originalName: result.originalName,
+          extractedData: result.extractedData,
+          error: result.error,
+          selected: !result.error && result.extractedData?.confidence > 0.3,
+          notes: result.extractedData?.notes || "", // Use AI-extracted notes (e.g., alternative print settings)
+          storageLocation: "",
+          status: result.extractedData?.isSealed !== false ? "sealed" : "opened",
+          remainingPercentage,
+          lastDryingDate: "",
+        };
+      });
       setProcessedImages(processed);
       setActiveTab("review");
       setIsProcessing(false);
@@ -459,9 +525,11 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   // Start processing
   const handleProcessImages = () => {
     if (selectedFiles.length === 0) return;
+    const filesToProcess = selectedFiles;
+    setSelectedFiles([]);
     setIsProcessing(true);
     setProcessingProgress({ current: 0, total: selectedFiles.length });
-    processImagesMutation.mutate(selectedFiles);
+    processImagesMutation.mutate(filesToProcess);
   };
 
   // Create mobile upload session
@@ -575,17 +643,24 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                   !existingUrls.has(result.imageUrl) && 
                   !importedUrlsRef.current.has(result.imageUrl)
                 )
-                .map((result: any) => ({
-                  imageUrl: result.imageUrl,
-                  extractedData: result.extractedData,
-                  error: result.error,
-                  selected: !result.error && result.extractedData?.confidence > 0.3,
-                  notes: result.extractedData?.notes || "",
-                  storageLocation: "",
-                  status: result.extractedData?.isSealed !== false ? "sealed" : "opened",
-                  remainingPercentage: 100,
-                  lastDryingDate: "",
-                }));
+                .map((result: any) => {
+                  const aiRemaining = Number(result.extractedData?.remainingPercentage);
+                  const remainingPercentage = Number.isFinite(aiRemaining)
+                    ? Math.max(0, Math.min(100, Math.round(aiRemaining)))
+                    : 100;
+
+                  return {
+                    imageUrl: result.imageUrl,
+                    extractedData: result.extractedData,
+                    error: result.error,
+                    selected: !result.error && result.extractedData?.confidence > 0.3,
+                    notes: result.extractedData?.notes || "",
+                    storageLocation: "",
+                    status: result.extractedData?.isSealed !== false ? "sealed" : "opened",
+                    remainingPercentage,
+                    lastDryingDate: "",
+                  };
+                });
               
               return trulyNew.length > 0 ? [...prev, ...trulyNew] : prev;
             });
@@ -1192,6 +1267,9 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                   <Button
                     variant="outline"
                     onClick={() => {
+                      if (mobileSession?.token) {
+                        deleteUploadSession(mobileSession.token);
+                      }
                       setMobileSession(null);
                       if (pollingRef.current) {
                         clearInterval(pollingRef.current);
@@ -1281,7 +1359,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                       size="sm"
                       onClick={() => {
                         if (confirm(t("ai.confirmClearAll") || "Clear all pending imports?")) {
-                          setProcessedImages([]);
+                          resetReviewState();
                         }
                       }}
                       className="text-red-500 hover:text-red-700"

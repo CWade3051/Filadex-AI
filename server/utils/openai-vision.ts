@@ -12,6 +12,8 @@ export interface ExtractedFilamentData {
   printTemp?: string;
   printSpeed?: string; // Print speed range (e.g., '30-100mm/s')
   totalWeight?: number;
+  remainingPercentage?: number;
+  scaleGrams?: number;
   bedTemp?: string;
   dryingTemp?: string;
   dryingTime?: string;
@@ -93,6 +95,8 @@ Return a JSON object:
   "printTemp": "HIGHEST speed temp range (e.g., '230-260°C')",
   "printSpeed": "HIGHEST speed range (e.g., '300-600mm/s')",
   "totalWeight": 1.0,
+  "remainingPercentage": 100,
+  "scaleGrams": 1244,
   "bedTemp": "Bed temperature (e.g., '50-60°C')",
   "dryingTemp": "Drying temperature if known",
   "dryingTime": "Drying time if known",
@@ -138,6 +142,19 @@ Determine if the spool is still sealed or has been opened:
 - Obvious signs of use (filament amount visibly reduced)
 
 **DEFAULT TO SEALED** if the spool is in ANY kind of bag or wrap. Most photos are of sealed spools.
+
+## SCALE WEIGHT DETECTION - CRITICAL
+If a digital scale is visible in the photo and shows a weight in grams:
+- This spool is OPENED (isSealed: false).
+- The scale reading is spool + filament.
+- Return the numeric scale reading as "scaleGrams".
+- Estimate the empty spool (tare) weight based on manufacturer and spool type:
+  - **Bambu Lab reusable plastic spool (gray/white with dot pattern): 250g tare**
+  - **Bambu Lab refill spool (no plastic spool, just filament on a cardboard core): 200g tare**
+- Remaining filament grams = max(scale grams - tare grams, 0).
+- If the label indicates a spool weight (usually 1kg), use that as totalWeight; otherwise assume 1.0kg.
+- remainingPercentage = round(remainingGrams / (totalWeightKg * 1000) * 100), clamped 0-100.
+- Add a short note if you used a scale estimate, e.g. "Scale detected: 1244g, tare 250g, remaining 994g (~99%)."
 
 ## PRINT SPEED - MUST FILL IN FOR KNOWN BRANDS
 **You MUST provide a print speed value if you identify the brand.** Look it up from your knowledge.
@@ -455,6 +472,45 @@ function cleanExtractedData(data: ExtractedFilamentData): ExtractedFilamentData 
     const weight = typeof data.totalWeight === 'string' ? parseFloat(data.totalWeight) : data.totalWeight;
     if (!isNaN(weight) && weight > 0 && weight < 100) {
       cleaned.totalWeight = weight;
+    }
+  }
+
+  if (data.scaleGrams !== undefined) {
+    const grams = typeof data.scaleGrams === 'string' ? parseFloat(data.scaleGrams) : data.scaleGrams;
+    if (!isNaN(grams) && grams > 0 && grams < 100000) {
+      cleaned.scaleGrams = grams;
+    }
+  }
+
+  if (data.remainingPercentage !== undefined) {
+    const remaining = typeof data.remainingPercentage === 'string'
+      ? parseFloat(data.remainingPercentage)
+      : data.remainingPercentage;
+    if (!isNaN(remaining)) {
+      cleaned.remainingPercentage = Math.max(0, Math.min(100, Math.round(remaining)));
+    }
+  }
+
+  if (cleaned.remainingPercentage === undefined && cleaned.scaleGrams && cleaned.manufacturer) {
+    const mfr = cleaned.manufacturer.toLowerCase();
+    if (mfr.includes('bambu')) {
+      const raw = `${data.rawText || ''} ${data.notes || ''}`.toLowerCase();
+      const isRefill = raw.includes('refill') || raw.includes('spoolless') || raw.includes('no spool');
+      const tareGrams = isRefill ? 200 : 250;
+      const totalWeightKg = cleaned.totalWeight || 1;
+      const totalWeightGrams = totalWeightKg * 1000;
+      const remainingGrams = Math.max(cleaned.scaleGrams - tareGrams, 0);
+      const remainingPercentage = Math.max(
+        0,
+        Math.min(100, Math.round((remainingGrams / totalWeightGrams) * 100))
+      );
+      cleaned.remainingPercentage = remainingPercentage;
+
+      const scaleNote = `Scale detected: ${Math.round(cleaned.scaleGrams)}g, tare ${tareGrams}g, remaining ${Math.round(remainingGrams)}g (~${remainingPercentage}%).`;
+      const hasScaleNote = (cleaned.notes || '').toLowerCase().includes('scale detected');
+      if (!hasScaleNote) {
+        cleaned.notes = cleaned.notes ? `${cleaned.notes} | ${scaleNote}` : scaleNote;
+      }
     }
   }
   
