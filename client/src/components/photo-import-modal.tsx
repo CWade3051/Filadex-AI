@@ -149,6 +149,15 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   const lastImageCountRef = useRef(0); // Track image count to detect new uploads
   const processedImageUrlsRef = useRef<Set<string>>(new Set()); // Track which images we've already processed
   
+  // Initialize processedImageUrlsRef from loaded processedImages to prevent re-processing
+  useEffect(() => {
+    processedImages.forEach(img => {
+      if (img.imageUrl) {
+        processedImageUrlsRef.current.add(img.imageUrl);
+      }
+    });
+  }, []); // Only on mount
+  
   // Persist processed images to localStorage
   useEffect(() => {
     try {
