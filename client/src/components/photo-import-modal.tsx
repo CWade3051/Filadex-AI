@@ -146,17 +146,16 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   const [pendingPhotoCount, setPendingPhotoCount] = useState(0); // Photos uploaded but not yet processed
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const processingPollingRef = useRef<NodeJS.Timeout | null>(null); // For polling processing results
-  const lastImageCountRef = useRef(0); // Track image count to detect new uploads
   const processedImageUrlsRef = useRef<Set<string>>(new Set()); // Track which images we've already processed
   
-  // Initialize processedImageUrlsRef from loaded processedImages to prevent re-processing
+  // Keep processedImageUrlsRef in sync with processedImages to prevent re-processing
   useEffect(() => {
     processedImages.forEach(img => {
       if (img.imageUrl) {
         processedImageUrlsRef.current.add(img.imageUrl);
       }
     });
-  }, []); // Only on mount
+  }, [processedImages]); // Update whenever processedImages changes
   
   // Persist processed images to localStorage
   useEffect(() => {
@@ -442,8 +441,13 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
 
   // Start polling for mobile uploads - continues polling to catch "Upload More"
   const startPolling = (token: string) => {
+    // Don't restart polling if already running
+    if (pollingRef.current) {
+      console.log('Polling already running, skipping restart');
+      return;
+    }
+    
     setIsPolling(true);
-    lastImageCountRef.current = 0;
     
     pollingRef.current = setInterval(async () => {
       try {
@@ -453,33 +457,27 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         if (response.ok) {
           const data = await response.json();
           
-          // Check if we have new images since last poll
-          if (data.imageCount > lastImageCountRef.current) {
-            const newImageCount = data.imageCount - lastImageCountRef.current;
-            lastImageCountRef.current = data.imageCount;
+          // Find new images that we haven't processed yet (URL-based tracking only)
+          const newImages = data.images.filter((img: any) => 
+            !processedImageUrlsRef.current.has(img.imageUrl)
+          );
+          
+          if (newImages.length > 0) {
+            // Mark these images as being processed BEFORE showing notification
+            newImages.forEach((img: any) => {
+              processedImageUrlsRef.current.add(img.imageUrl);
+            });
             
-            // Find new images that we haven't processed yet
-            const newImages = data.images.filter((img: any) => 
-              !processedImageUrlsRef.current.has(img.imageUrl)
-            );
+            // Update pending count and show notification
+            setPendingPhotoCount(prev => prev + newImages.length);
+            toast({
+              title: t("ai.newPhotosReceived") || "New Photos Received",
+              description: `${newImages.length} new photo(s) - processing with AI...`,
+            });
             
-            if (newImages.length > 0) {
-              // Mark these images as being processed
-              newImages.forEach((img: any) => {
-                processedImageUrlsRef.current.add(img.imageUrl);
-              });
-              
-              // Update pending count and show notification
-              setPendingPhotoCount(prev => prev + newImages.length);
-              toast({
-                title: t("ai.newPhotosReceived") || "New Photos Received",
-                description: `${newImageCount} new photo(s) - processing with AI...`,
-              });
-              
-              // Trigger AI processing for the session
-              setIsProcessing(true);
-              processMobileSessionMutation.mutate(token);
-            }
+            // Trigger AI processing for the session
+            setIsProcessing(true);
+            processMobileSessionMutation.mutate(token);
           }
         }
       } catch (error) {
