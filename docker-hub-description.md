@@ -38,6 +38,13 @@ Filadex-AI is an enhanced fork of Filadex with **AI-powered photo import** capab
 - **Sealed/Opened Tracking**: AI detects if spool is still sealed
 - **Storage Location System**: Two-tier storage with pre-defined locations
 
+### Advanced Features
+- **Cloud Backup**: S3, WebDAV, local JSON backup/restore
+- **Print Job Logging**: Track prints with filament usage and costs
+- **Material Compatibility**: Track which materials work well together
+- **Slicer Profiles**: Upload and manage printer profiles
+- **Admin Full Backup**: Backup/restore all users' data
+
 ## Quick Start
 
 ```yaml

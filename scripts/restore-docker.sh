@@ -22,7 +22,9 @@ i=1
 declare -a backups
 for backup in ${BACKUP_DIR}/*prod*.zip; do
     backups[$i]="$backup"
-    echo "  [$i] $(basename "$backup")"
+    SIZE=$(wc -c < "$backup" | tr -d ' ')
+    SIZE_HUMAN=$(numfmt --to=iec-i --suffix=B $SIZE 2>/dev/null || echo "${SIZE} bytes")
+    echo "  [$i] $(basename "$backup") ($SIZE_HUMAN)"
     ((i++))
 done
 
@@ -37,6 +39,8 @@ fi
 BACKUP_FILE="${backups[$selection]}"
 echo ""
 echo "🔴 WARNING: This will OVERWRITE all PRODUCTION data!"
+echo "   - All users, filaments, print jobs, history will be replaced"
+echo "   - All uploaded images and slicer profiles will be replaced"
 echo "   Selected: $(basename "$BACKUP_FILE")"
 echo ""
 read -p "Are you sure? (type 'RESTORE PRODUCTION' to confirm): " confirm
@@ -63,14 +67,35 @@ EXTRACTED_DIR=$(ls "$TEMP_DIR")
 
 # Restore database
 echo "💾 Restoring database..."
+echo "   Tables: users, filaments, print_jobs, filament_history, slicer_profiles,"
+echo "           material_compatibility, user_sharing, manufacturers, materials,"
+echo "           colors, diameters, storage_locations, backup_history"
 docker exec -i filadex-db-1 psql -U filadex -d filadex -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" > /dev/null 2>&1
 docker exec -i filadex-db-1 psql -U filadex -d filadex < "${TEMP_DIR}/${EXTRACTED_DIR}/database.sql" > /dev/null 2>&1
+echo "   ✅ Database restored"
 
 # Restore images to Docker volume
 echo "🖼️  Restoring uploaded images..."
 docker exec filadex-app-1 rm -rf /app/public/uploads/filaments/* 2>/dev/null || true
+docker exec filadex-app-1 mkdir -p /app/public/uploads/filaments 2>/dev/null || true
 if [ -d "${TEMP_DIR}/${EXTRACTED_DIR}/images" ] && [ "$(ls -A ${TEMP_DIR}/${EXTRACTED_DIR}/images 2>/dev/null)" ]; then
     docker cp "${TEMP_DIR}/${EXTRACTED_DIR}/images/." filadex-app-1:/app/public/uploads/filaments/
+    IMG_COUNT=$(find "${TEMP_DIR}/${EXTRACTED_DIR}/images" -type f 2>/dev/null | wc -l | tr -d ' ')
+    echo "   ✅ Restored ${IMG_COUNT} filament images"
+else
+    echo "   (No images to restore)"
+fi
+
+# Restore slicer profiles to Docker volume
+echo "📄 Restoring slicer profiles..."
+docker exec filadex-app-1 rm -rf /app/uploads/profiles/* 2>/dev/null || true
+docker exec filadex-app-1 mkdir -p /app/uploads/profiles 2>/dev/null || true
+if [ -d "${TEMP_DIR}/${EXTRACTED_DIR}/profiles" ] && [ "$(ls -A ${TEMP_DIR}/${EXTRACTED_DIR}/profiles 2>/dev/null)" ]; then
+    docker cp "${TEMP_DIR}/${EXTRACTED_DIR}/profiles/." filadex-app-1:/app/uploads/profiles/
+    PROFILE_COUNT=$(find "${TEMP_DIR}/${EXTRACTED_DIR}/profiles" -type f 2>/dev/null | wc -l | tr -d ' ')
+    echo "   ✅ Restored ${PROFILE_COUNT} slicer profiles"
+else
+    echo "   (No slicer profiles to restore)"
 fi
 
 # Cleanup
@@ -79,3 +104,6 @@ rm -rf "$TEMP_DIR"
 echo ""
 echo "✅ Restore complete!"
 echo "   Access at http://localhost:8080"
+echo ""
+echo "💡 TIP: Clear your browser cache/localStorage after restore"
+echo "   to avoid conflicts with the previous session."

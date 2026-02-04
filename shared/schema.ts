@@ -376,10 +376,24 @@ export const cloudBackupConfigs = pgTable("cloud_backup_configs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
   
-  provider: text("provider").notNull(), // google_drive, dropbox, onedrive
+  provider: text("provider").notNull(), // google, dropbox, onedrive, s3, webdav
+  
+  // OAuth tokens (for Google, Dropbox, OneDrive)
   accessToken: text("access_token"), // encrypted
   refreshToken: text("refresh_token"), // encrypted
   tokenExpiresAt: timestamp("token_expires_at"),
+  
+  // S3-compatible storage settings
+  s3Endpoint: text("s3_endpoint"), // e.g., https://s3.amazonaws.com or https://s3.us-west-001.backblazeb2.com
+  s3Bucket: text("s3_bucket"),
+  s3Region: text("s3_region"),
+  s3AccessKeyId: text("s3_access_key_id"), // encrypted
+  s3SecretAccessKey: text("s3_secret_access_key"), // encrypted
+  
+  // WebDAV settings
+  webdavUrl: text("webdav_url"), // e.g., https://nextcloud.example.com/remote.php/dav/files/user/
+  webdavUsername: text("webdav_username"),
+  webdavPassword: text("webdav_password"), // encrypted
   
   // Settings
   isEnabled: boolean("is_enabled").default(false),

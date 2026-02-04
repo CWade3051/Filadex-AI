@@ -22,7 +22,9 @@ i=1
 declare -a backups
 for backup in ${BACKUP_DIR}/*dev*.zip; do
     backups[$i]="$backup"
-    echo "  [$i] $(basename "$backup")"
+    SIZE=$(wc -c < "$backup" | tr -d ' ')
+    SIZE_HUMAN=$(numfmt --to=iec-i --suffix=B $SIZE 2>/dev/null || echo "${SIZE} bytes")
+    echo "  [$i] $(basename "$backup") ($SIZE_HUMAN)"
     ((i++))
 done
 
@@ -37,6 +39,8 @@ fi
 BACKUP_FILE="${backups[$selection]}"
 echo ""
 echo "⚠️  WARNING: This will OVERWRITE all local development data!"
+echo "   - All users, filaments, print jobs, history will be replaced"
+echo "   - All uploaded images and slicer profiles will be replaced"
 echo "   Selected: $(basename "$BACKUP_FILE")"
 echo ""
 read -p "Are you sure? (type 'yes' to confirm): " confirm
@@ -63,8 +67,12 @@ EXTRACTED_DIR=$(ls "$TEMP_DIR")
 
 # Restore database
 echo "💾 Restoring database..."
+echo "   Tables: users, filaments, print_jobs, filament_history, slicer_profiles,"
+echo "           material_compatibility, user_sharing, manufacturers, materials,"
+echo "           colors, diameters, storage_locations, backup_history"
 docker exec -i filadex-db-dev psql -U filadex_dev -d filadex_dev -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" > /dev/null 2>&1
 docker exec -i filadex-db-dev psql -U filadex_dev -d filadex_dev < "${TEMP_DIR}/${EXTRACTED_DIR}/database.sql" > /dev/null 2>&1
+echo "   ✅ Database restored"
 
 # Restore images
 echo "🖼️  Restoring uploaded images..."
@@ -72,6 +80,24 @@ rm -rf public/uploads/filaments/*
 if [ -d "${TEMP_DIR}/${EXTRACTED_DIR}/images" ] && [ "$(ls -A ${TEMP_DIR}/${EXTRACTED_DIR}/images 2>/dev/null)" ]; then
     mkdir -p public/uploads/filaments
     cp -r "${TEMP_DIR}/${EXTRACTED_DIR}/images/"* public/uploads/filaments/
+    IMG_COUNT=$(find public/uploads/filaments -type f 2>/dev/null | wc -l | tr -d ' ')
+    echo "   ✅ Restored ${IMG_COUNT} filament images"
+else
+    mkdir -p public/uploads/filaments
+    echo "   (No images to restore)"
+fi
+
+# Restore slicer profiles
+echo "📄 Restoring slicer profiles..."
+rm -rf uploads/profiles/*
+if [ -d "${TEMP_DIR}/${EXTRACTED_DIR}/profiles" ] && [ "$(ls -A ${TEMP_DIR}/${EXTRACTED_DIR}/profiles 2>/dev/null)" ]; then
+    mkdir -p uploads/profiles
+    cp -r "${TEMP_DIR}/${EXTRACTED_DIR}/profiles/"* uploads/profiles/
+    PROFILE_COUNT=$(find uploads/profiles -type f 2>/dev/null | wc -l | tr -d ' ')
+    echo "   ✅ Restored ${PROFILE_COUNT} slicer profiles"
+else
+    mkdir -p uploads/profiles
+    echo "   (No slicer profiles to restore)"
 fi
 
 # Cleanup
@@ -80,3 +106,6 @@ rm -rf "$TEMP_DIR"
 echo ""
 echo "✅ Restore complete!"
 echo "   Run ./scripts/run.sh to start the development server"
+echo ""
+echo "💡 TIP: Clear your browser cache/localStorage after restore"
+echo "   to avoid conflicts with the previous session."

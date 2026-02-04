@@ -185,8 +185,11 @@ Both backup scripts create a zip archive containing:
 ```
 filadex_backup_YYYYMMDD_HHMMSS/
 ├── database.sql    # Full PostgreSQL dump (all tables below)
-└── images/         # All uploaded filament photos
-    ├── filament-xxxxx.jpeg
+├── images/         # All uploaded filament photos
+│   ├── filament-xxxxx.jpeg
+│   └── ...
+└── profiles/       # Uploaded slicer profile files
+    ├── profile-xxxxx.ini
     └── ...
 ```
 
@@ -196,12 +199,18 @@ filadex_backup_YYYYMMDD_HHMMSS/
 |-------|-------------|------------|
 | `users` | User accounts | username, password (bcrypt hashed), is_admin, openai_api_key (AES encrypted), settings |
 | `filaments` | Filament inventory | name, manufacturer, material, color, weight, temps, storage location, image_url, notes |
+| `print_jobs` | Print job logs | name, filament usage, duration, status, timestamps |
+| `filament_history` | Usage history | filament_id, change_type, quantity, notes |
+| `slicer_profiles` | Slicer configs | name, slicer, material, settings JSON |
+| `material_compatibility` | Adhesion matrix | material1, material2, compatibility rating, notes |
 | `manufacturers` | Manufacturer list | name, sort_order |
 | `materials` | Material types | name, sort_order |
 | `colors` | Color definitions | name, hex code |
 | `diameters` | Filament diameters | value (1.75, 2.85) |
 | `storage_locations` | Storage locations | name, description, capacity |
 | `user_sharing` | Sharing settings | user_id, material_id, is_public |
+| `cloud_backup_configs` | Cloud backup config | provider, tokens/credentials (encrypted), settings |
+| `backup_history` | Backup logs | provider, status, file_size, timestamps |
 
 #### Users Table Details
 
@@ -260,10 +269,38 @@ filadex_backup_YYYYMMDD_HHMMSS/
 **Output:** `backups/filadex_prod_backup_YYYYMMDD_HHMMSS.zip`
 
 **Backup contents:**
-- `database.sql` - Full database dump
+- `database.sql` - Full database dump (all tables)
 - `images/` - All uploaded filament photos
+- `profiles/` - All uploaded slicer profile files
 
 **Requirements:** Docker containers must be running.
+
+### Web UI Cloud Backup
+
+In addition to shell scripts, Filadex provides a web-based backup interface via **Tools > Cloud Backup**:
+
+| Method | Description | Setup Required |
+|--------|-------------|----------------|
+| **Local Backup** | Download/upload JSON files in browser | None |
+| **S3-Compatible** | AWS S3, Backblaze B2, Wasabi, MinIO | Access keys |
+| **WebDAV** | Nextcloud, ownCloud, Synology | URL + credentials |
+| **OAuth Providers** | Google Drive, Dropbox, OneDrive | App registration |
+
+#### Web Backup Contents (JSON)
+
+| Data | User Backup | Admin Full Backup |
+|------|-------------|-------------------|
+| Filaments | Your filaments | All users' filaments |
+| Print Jobs | Your jobs | All users' jobs |
+| Filament History | Your history | All users' history |
+| Slicer Profiles | Your profiles | All users' profiles |
+| User Sharing | Your settings | All users' settings |
+| Material Compatibility | All entries | All entries |
+| Backup History | Your logs | All logs |
+| Users | N/A | All (no passwords/API keys) |
+| User Settings | Your language/currency/temp | All users' settings |
+
+**Note**: Admin restore creates new users with temporary password "changeme" and `force_change_password: true`.
 
 ---
 

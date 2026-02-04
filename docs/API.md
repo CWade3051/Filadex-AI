@@ -15,6 +15,9 @@ This document provides comprehensive documentation for the Filadex API endpoints
 9. [Sharing](#sharing)
 10. [Statistics](#statistics)
 11. [Theme](#theme)
+12. [Cloud Backup](#cloud-backup)
+13. [Print Jobs](#print-jobs)
+14. [Material Compatibility](#material-compatibility)
 
 ## Authentication
 
@@ -1180,6 +1183,343 @@ Updates the theme settings.
 - **Error Responses**:
   - `400 Bad Request`: Validation error
   - `500 Internal Server Error`: Failed to update theme
+
+## Cloud Backup
+
+### Download Local Backup
+
+Downloads a JSON backup of the current user's data.
+
+- **URL**: `/api/cloud-backup/download`
+- **Method**: `GET`
+- **Authentication**: Required
+- **Response**: `200 OK` (application/json file download)
+- **Response Body**:
+  ```json
+  {
+    "version": "1.2",
+    "backupType": "user",
+    "exportedAt": "2026-02-04T12:00:00.000Z",
+    "userSettings": {
+      "language": "en",
+      "currency": "USD",
+      "temperatureUnit": "C"
+    },
+    "data": {
+      "filaments": [],
+      "printJobs": [],
+      "slicerProfiles": [],
+      "filamentHistory": [],
+      "userSharing": [],
+      "backupHistory": [],
+      "manufacturers": [],
+      "materials": [],
+      "colors": [],
+      "diameters": [],
+      "storageLocations": [],
+      "materialCompatibility": []
+    }
+  }
+  ```
+
+### Restore Local Backup
+
+Restores data from a previously downloaded backup file.
+
+- **URL**: `/api/cloud-backup/restore`
+- **Method**: `POST`
+- **Authentication**: Required
+- **Request Body**: The backup JSON object
+- **Response**: `200 OK`
+  ```json
+  {
+    "message": "Restore completed",
+    "restored": {
+      "filaments": 10,
+      "printJobs": 5,
+      "slicerProfiles": 2,
+      "filamentHistory": 15,
+      "userSharing": 1,
+      "materialCompatibility": 8,
+      "userSettings": true
+    }
+  }
+  ```
+
+### Configure S3-Compatible Storage
+
+Saves S3 configuration for cloud backups.
+
+- **URL**: `/api/cloud-backup/s3/configure`
+- **Method**: `POST`
+- **Authentication**: Required
+- **Request Body**:
+  ```json
+  {
+    "endpoint": "https://s3.amazonaws.com",
+    "bucket": "my-backup-bucket",
+    "region": "us-east-1",
+    "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+    "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "folderPath": "filadex-backups"
+  }
+  ```
+- **Response**: `200 OK`
+  ```json
+  {
+    "message": "S3 configuration saved",
+    "testResult": "success"
+  }
+  ```
+
+### Backup to S3
+
+Triggers a backup to configured S3-compatible storage.
+
+- **URL**: `/api/cloud-backup/s3/backup`
+- **Method**: `POST`
+- **Authentication**: Required
+- **Response**: `200 OK`
+  ```json
+  {
+    "message": "Backup completed successfully",
+    "filename": "filadex-backup-2026-02-04T12-00-00.json"
+  }
+  ```
+
+### Configure WebDAV Storage
+
+Saves WebDAV configuration for cloud backups.
+
+- **URL**: `/api/cloud-backup/webdav/configure`
+- **Method**: `POST`
+- **Authentication**: Required
+- **Request Body**:
+  ```json
+  {
+    "url": "https://nextcloud.example.com/remote.php/dav/files/user/",
+    "username": "myuser",
+    "password": "app-password",
+    "folderPath": "Filadex-Backups"
+  }
+  ```
+- **Response**: `200 OK`
+  ```json
+  {
+    "message": "WebDAV configuration saved",
+    "testResult": "success"
+  }
+  ```
+
+### Backup to WebDAV
+
+Triggers a backup to configured WebDAV storage.
+
+- **URL**: `/api/cloud-backup/webdav/backup`
+- **Method**: `POST`
+- **Authentication**: Required
+- **Response**: `200 OK`
+  ```json
+  {
+    "message": "Backup completed successfully",
+    "filename": "filadex-backup-2026-02-04T12-00-00.json"
+  }
+  ```
+
+### Admin Full Backup Download
+
+Downloads a complete backup of all users' data (admin only).
+
+- **URL**: `/api/cloud-backup/admin/download`
+- **Method**: `GET`
+- **Authentication**: Required (Admin)
+- **Response**: `200 OK` (application/json file download)
+- **Response Body**:
+  ```json
+  {
+    "version": "1.2",
+    "backupType": "admin_full",
+    "exportedAt": "2026-02-04T12:00:00.000Z",
+    "data": {
+      "users": [],
+      "filaments": [],
+      "printJobs": [],
+      "slicerProfiles": [],
+      "filamentHistory": [],
+      "userSharing": [],
+      "backupHistory": [],
+      "manufacturers": [],
+      "materials": [],
+      "colors": [],
+      "diameters": [],
+      "storageLocations": [],
+      "materialCompatibility": []
+    }
+  }
+  ```
+
+### Admin Full Backup Restore
+
+Restores a complete system backup including all users (admin only).
+
+- **URL**: `/api/cloud-backup/admin/restore`
+- **Method**: `POST`
+- **Authentication**: Required (Admin)
+- **Request Body**: The admin backup JSON object
+- **Response**: `200 OK`
+  ```json
+  {
+    "message": "Admin restore completed",
+    "restored": {
+      "users": 3,
+      "filaments": 50,
+      "printJobs": 25,
+      "slicerProfiles": 10,
+      "filamentHistory": 100,
+      "userSharing": 5,
+      "materialCompatibility": 20
+    },
+    "note": "3 new users created with temporary password \"changeme\""
+  }
+  ```
+- **Note**: New users are created with password "changeme" and `forceChangePassword: true`
+
+### Get Backup Status
+
+Returns the status of all configured backup providers.
+
+- **URL**: `/api/cloud-backup/status-extended`
+- **Method**: `GET`
+- **Authentication**: Required
+- **Response**: `200 OK`
+  ```json
+  {
+    "google": { "configured": false, "enabled": false, "lastBackup": null },
+    "dropbox": { "configured": false, "enabled": false, "lastBackup": null },
+    "onedrive": { "configured": false, "enabled": false, "lastBackup": null },
+    "s3": { "configured": true, "enabled": true, "lastBackup": "2026-02-04T12:00:00.000Z" },
+    "webdav": { "configured": true, "enabled": false, "lastBackup": null }
+  }
+  ```
+
+### Get Backup History
+
+Returns the backup/restore history for the current user.
+
+- **URL**: `/api/cloud-backup/history`
+- **Method**: `GET`
+- **Authentication**: Required
+- **Response**: `200 OK`
+  ```json
+  [
+    {
+      "id": 1,
+      "provider": "s3",
+      "status": "completed",
+      "fileSize": 12345,
+      "startedAt": "2026-02-04T12:00:00.000Z",
+      "completedAt": "2026-02-04T12:00:05.000Z"
+    }
+  ]
+  ```
+
+## Print Jobs
+
+### Get All Print Jobs
+
+Returns all print jobs for the authenticated user.
+
+- **URL**: `/api/print-jobs`
+- **Method**: `GET`
+- **Authentication**: Required
+- **Response**: `200 OK`
+  ```json
+  [
+    {
+      "id": 1,
+      "userId": 1,
+      "name": "Benchy",
+      "filamentId": 5,
+      "status": "completed",
+      "filamentUsed": "15.5",
+      "printDuration": 3600,
+      "notes": "First print with new PLA",
+      "createdAt": "2026-02-04T12:00:00.000Z"
+    }
+  ]
+  ```
+
+### Create Print Job
+
+Creates a new print job record.
+
+- **URL**: `/api/print-jobs`
+- **Method**: `POST`
+- **Authentication**: Required
+- **Request Body**:
+  ```json
+  {
+    "name": "Benchy",
+    "filamentId": 5,
+    "status": "completed",
+    "filamentUsed": 15.5,
+    "printDuration": 3600,
+    "notes": "First print with new PLA"
+  }
+  ```
+- **Response**: `201 Created`
+
+## Material Compatibility
+
+### Get All Compatibility Entries
+
+Returns all material compatibility entries.
+
+- **URL**: `/api/material-compatibility`
+- **Method**: `GET`
+- **Authentication**: Required
+- **Response**: `200 OK`
+  ```json
+  [
+    {
+      "id": 1,
+      "material1": "PLA",
+      "material2": "PETG",
+      "compatibility": "poor",
+      "interfaceStrength": "weak",
+      "notes": "Materials do not bond well",
+      "createdAt": "2026-02-04T12:00:00.000Z"
+    }
+  ]
+  ```
+
+### Create Compatibility Entry
+
+Creates a new material compatibility entry.
+
+- **URL**: `/api/material-compatibility`
+- **Method**: `POST`
+- **Authentication**: Required
+- **Request Body**:
+  ```json
+  {
+    "material1": "PLA",
+    "material2": "PLA+",
+    "compatibility": "excellent",
+    "interfaceStrength": "strong",
+    "notes": "Very similar materials, bond well"
+  }
+  ```
+- **Response**: `201 Created`
+
+### Delete Compatibility Entry
+
+Deletes a material compatibility entry.
+
+- **URL**: `/api/material-compatibility/:id`
+- **Method**: `DELETE`
+- **Authentication**: Required
+- **Response**: `204 No Content`
 
 ## Error Responses
 

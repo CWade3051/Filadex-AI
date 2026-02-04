@@ -232,6 +232,17 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
     access_token TEXT,
     refresh_token TEXT,
     token_expires_at TIMESTAMP WITH TIME ZONE,
+    -- S3-compatible storage settings
+    s3_endpoint TEXT,
+    s3_bucket TEXT,
+    s3_region TEXT,
+    s3_access_key_id TEXT,
+    s3_secret_access_key TEXT,
+    -- WebDAV settings
+    webdav_url TEXT,
+    webdav_username TEXT,
+    webdav_password TEXT,
+    -- Common settings
     is_enabled BOOLEAN DEFAULT FALSE,
     backup_frequency TEXT,
     last_backup_at TIMESTAMP WITH TIME ZONE,
@@ -389,6 +400,57 @@ ARCHIVE_REASON_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PG
 if [ "$ARCHIVE_REASON_EXISTS" = "f" ]; then
   PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.filaments ADD COLUMN archive_reason TEXT;"
   echo "archive_reason column added."
+fi
+
+# Phase 3: S3 and WebDAV cloud backup columns
+echo "Checking cloud_backup_configs columns..."
+
+S3_ENDPOINT_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cloud_backup_configs' AND column_name = 's3_endpoint')")
+if [ "$S3_ENDPOINT_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.cloud_backup_configs ADD COLUMN s3_endpoint TEXT;"
+  echo "s3_endpoint column added."
+fi
+
+S3_BUCKET_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cloud_backup_configs' AND column_name = 's3_bucket')")
+if [ "$S3_BUCKET_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.cloud_backup_configs ADD COLUMN s3_bucket TEXT;"
+  echo "s3_bucket column added."
+fi
+
+S3_REGION_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cloud_backup_configs' AND column_name = 's3_region')")
+if [ "$S3_REGION_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.cloud_backup_configs ADD COLUMN s3_region TEXT;"
+  echo "s3_region column added."
+fi
+
+S3_ACCESS_KEY_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cloud_backup_configs' AND column_name = 's3_access_key_id')")
+if [ "$S3_ACCESS_KEY_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.cloud_backup_configs ADD COLUMN s3_access_key_id TEXT;"
+  echo "s3_access_key_id column added."
+fi
+
+S3_SECRET_KEY_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cloud_backup_configs' AND column_name = 's3_secret_access_key')")
+if [ "$S3_SECRET_KEY_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.cloud_backup_configs ADD COLUMN s3_secret_access_key TEXT;"
+  echo "s3_secret_access_key column added."
+fi
+
+WEBDAV_URL_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cloud_backup_configs' AND column_name = 'webdav_url')")
+if [ "$WEBDAV_URL_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.cloud_backup_configs ADD COLUMN webdav_url TEXT;"
+  echo "webdav_url column added."
+fi
+
+WEBDAV_USERNAME_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cloud_backup_configs' AND column_name = 'webdav_username')")
+if [ "$WEBDAV_USERNAME_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.cloud_backup_configs ADD COLUMN webdav_username TEXT;"
+  echo "webdav_username column added."
+fi
+
+WEBDAV_PASSWORD_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cloud_backup_configs' AND column_name = 'webdav_password')")
+if [ "$WEBDAV_PASSWORD_EXISTS" = "f" ]; then
+  PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "ALTER TABLE public.cloud_backup_configs ADD COLUMN webdav_password TEXT;"
+  echo "webdav_password column added."
 fi
 
 echo "All column migrations completed."

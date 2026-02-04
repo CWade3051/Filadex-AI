@@ -187,6 +187,41 @@ The reset scripts pre-populate these storage locations (customize in the scripts
 - **Session-based Auth**: Secure cookie-based authentication
 - **Bcrypt Passwords**: User passwords are securely hashed with bcrypt
 
+## 💾 Backup & Restore
+
+Filadex provides multiple backup options to protect your data:
+
+### Web UI Backup (Tools > Cloud Backup)
+- **Local Backup**: Download/upload JSON backup files directly in the browser
+- **S3-Compatible Storage**: AWS S3, Backblaze B2, Wasabi, MinIO, etc.
+- **WebDAV Storage**: Nextcloud, ownCloud, Synology, etc.
+- **Admin Full Backup**: Backup all users' data (admin only)
+
+### Shell Script Backup
+```bash
+./scripts/backup.sh          # Local development
+./scripts/backup-docker.sh   # Docker production
+./scripts/restore.sh         # Restore local dev
+./scripts/restore-docker.sh  # Restore Docker prod
+```
+
+### What's Included in Backups
+
+| Data | User Backup | Admin Backup | Shell Backup |
+|------|-------------|--------------|--------------|
+| Filaments | ✅ Your filaments | ✅ All users | ✅ All |
+| Print Jobs | ✅ Your jobs | ✅ All users | ✅ All |
+| Filament History | ✅ Your history | ✅ All users | ✅ All |
+| Slicer Profiles | ✅ Your profiles | ✅ All users | ✅ All |
+| Material Compatibility | ✅ All | ✅ All | ✅ All |
+| User Sharing Settings | ✅ Your settings | ✅ All users | ✅ All |
+| Backup History | ✅ Your logs | ✅ All logs | ✅ All |
+| Users | ❌ | ✅ (no passwords) | ✅ All |
+| Images | ❌ | ❌ | ✅ All |
+| Slicer Profile Files | ❌ | ❌ | ✅ All |
+
+**Note**: Admin restore creates new users with temporary password "changeme" and forces password change on first login.
+
 ## 🗄️ Database Schema
 
 Filadex uses PostgreSQL with the following tables:
@@ -195,12 +230,18 @@ Filadex uses PostgreSQL with the following tables:
 |-------|---------|
 | `users` | User accounts, credentials, and settings |
 | `filaments` | Filament inventory with all properties |
+| `print_jobs` | Print job logging with filament usage |
+| `filament_history` | Filament consumption history over time |
+| `slicer_profiles` | Slicer profile configurations |
+| `material_compatibility` | Material adhesion compatibility matrix |
 | `manufacturers` | Filament brands/manufacturers |
 | `materials` | Material types (PLA, PETG, TPU, etc.) |
 | `colors` | Color definitions with hex codes |
 | `diameters` | Filament diameters (1.75mm, 2.85mm) |
 | `storage_locations` | Storage locations with capacity |
 | `user_sharing` | Public sharing settings |
+| `cloud_backup_configs` | Cloud backup provider configurations |
+| `backup_history` | Backup/restore operation logs |
 
 ### Key Fields in Filaments Table
 

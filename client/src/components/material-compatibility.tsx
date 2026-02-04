@@ -51,7 +51,7 @@ export function MaterialCompatibilityMatrix({ open, onOpenChange }: Compatibilit
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const [selectedMaterial, setSelectedMaterial] = useState<string>("");
+  const [selectedMaterial, setSelectedMaterial] = useState<string>("all");
   const [showAddDialog, setShowAddDialog] = useState(false);
 
   // Fetch compatibility data
@@ -100,7 +100,7 @@ export function MaterialCompatibilityMatrix({ open, onOpenChange }: Compatibilit
 
   // Filter compatibility data based on selected material
   const filteredData = useMemo(() => {
-    if (!selectedMaterial) return compatibilityData;
+    if (selectedMaterial === "all") return compatibilityData;
     return compatibilityData.filter(
       (entry) =>
         entry.material1 === selectedMaterial || entry.material2 === selectedMaterial
@@ -127,7 +127,7 @@ export function MaterialCompatibilityMatrix({ open, onOpenChange }: Compatibilit
                 <SelectValue placeholder="Filter by material..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Materials</SelectItem>
+                <SelectItem value="all">All Materials</SelectItem>
                 {uniqueMaterials.map((material) => (
                   <SelectItem key={material} value={material}>
                     {material}
@@ -330,7 +330,7 @@ function AddCompatibilityDialog({
   const [material1, setMaterial1] = useState("");
   const [material2, setMaterial2] = useState("");
   const [compatibilityLevel, setCompatibilityLevel] = useState("good");
-  const [interfaceStrength, setInterfaceStrength] = useState("");
+  const [interfaceStrength, setInterfaceStrength] = useState("none");
   const [notes, setNotes] = useState("");
 
   const createMutation = useMutation({
@@ -374,7 +374,7 @@ function AddCompatibilityDialog({
       material1,
       material2,
       compatibilityLevel,
-      interfaceStrength: interfaceStrength || undefined,
+      interfaceStrength: interfaceStrength === "none" ? undefined : interfaceStrength,
       notes: notes || undefined,
       source: "user",
     });
@@ -446,7 +446,7 @@ function AddCompatibilityDialog({
                   <SelectValue placeholder="Optional" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Not specified</SelectItem>
+                  <SelectItem value="none">Not specified</SelectItem>
                   <SelectItem value="strong">Strong</SelectItem>
                   <SelectItem value="medium">Medium</SelectItem>
                   <SelectItem value="weak">Weak</SelectItem>

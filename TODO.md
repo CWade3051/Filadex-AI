@@ -49,15 +49,28 @@ This document contains a list of pending tasks and improvements for the Filadex 
 
 ## Documentation
 
-- [x] **Update API Documentation**: Ensure all API endpoints are properly documented.
+- [x] **Update API Documentation**: Ensure all API endpoints are properly documented (including Cloud Backup, Print Jobs, Material Compatibility).
+- [x] **Scripts Documentation**: Updated SCRIPTS.md with comprehensive backup/restore information.
 - [ ] **User Guide Updates**: Update the user guide to reflect recent changes and new features.
 
 ## Future Enhancements (Backlog)
 
 - [x] **Batch Operations**: Add functionality for batch operations on filaments (delete, update).
-- [ ] **Filament Usage History**: Implement tracking of filament usage history.
-- [ ] **Print Job Association**: Add ability to associate print jobs with filaments.
+- [x] **Filament Usage History**: Implement tracking of filament usage history via `filament_history` table.
+- [x] **Print Job Association**: Add ability to associate print jobs with filaments via `print_jobs` table.
 - [ ] **Enhanced Sharing Features**: Implement QR code generation, password protection, and temporary links for shared collections.
+
+## Completed Features (Feb 2026)
+
+- [x] **Cloud Backup System**: Multiple backup options:
+  - Local JSON download/upload
+  - S3-compatible storage (AWS S3, Backblaze B2, Wasabi, MinIO)
+  - WebDAV storage (Nextcloud, ownCloud, Synology)
+  - Admin full backup/restore (all users)
+- [x] **Material Compatibility Matrix**: Track which materials work well together for multi-material prints
+- [x] **Slicer Profiles**: Upload and manage slicer profiles
+- [x] **Print Job Logging**: Track prints with filament usage and cost calculation
+- [x] **AI Photo Import**: Extract filament data from photos using OpenAI Vision
 
 ---
 

@@ -408,9 +408,50 @@ This runs TypeScript compiler without emitting files.
 - Run `npm run db:push` to sync schema
 - Check `shared/schema.ts` for correct table definitions
 
+## Backup & Restore
+
+### Shell Script Backups (Full Database)
+
+```bash
+# Create backup
+./scripts/backup.sh        # Local dev
+./scripts/backup-docker.sh # Docker prod
+
+# Restore from backup
+./scripts/restore.sh        # Local dev
+./scripts/restore-docker.sh # Docker prod
+```
+
+Backups are stored in `backups/` directory and include:
+- Full PostgreSQL dump (all tables)
+- Uploaded filament images
+- Uploaded slicer profile files
+
+### Web UI Backups (JSON)
+
+Access via **Tools > Cloud Backup** in the app:
+
+| Method | Description |
+|--------|-------------|
+| Local | Download/upload JSON files |
+| S3 | AWS S3, Backblaze B2, Wasabi, MinIO |
+| WebDAV | Nextcloud, ownCloud, Synology |
+| Admin Full | All users' data (admin only) |
+
+### What's Backed Up
+
+| Data | Shell | Web (User) | Web (Admin) |
+|------|-------|------------|-------------|
+| Database tables | All | User's data | All users |
+| Images | Yes | No | No |
+| Slicer profile files | Yes | No | No |
+| Passwords | Hashed | No | No |
+| API keys | Encrypted | No | No |
+
 ## Additional Resources
 
 - [API Documentation](./API.md)
+- [Scripts Documentation](../scripts/SCRIPTS.md)
 - [Translation Guide](./TRANSLATION_GUIDE.md)
 - [Contributing Guidelines](../CONTRIBUTING.md)
 - [Project README](../README.md)
