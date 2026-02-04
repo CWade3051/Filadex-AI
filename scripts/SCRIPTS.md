@@ -158,10 +158,6 @@ This folder contains shell scripts for managing both local development and Docke
 
 **Output:** `backups/filadex_dev_backup_YYYYMMDD_HHMMSS.zip`
 
-**Backup contents:**
-- `database.sql` - Full database dump
-- `images/` - All uploaded filament photos
-
 **Requirements:** Dev database must be running.
 
 ---
@@ -179,6 +175,87 @@ This folder contains shell scripts for managing both local development and Docke
 ```bash
 ./scripts/backup-docker.sh
 ```
+
+---
+
+### What's Included in Backups
+
+Both backup scripts create a zip archive containing:
+
+```
+filadex_backup_YYYYMMDD_HHMMSS/
+├── database.sql    # Full PostgreSQL dump (all tables below)
+└── images/         # All uploaded filament photos
+    ├── filament-xxxxx.jpeg
+    └── ...
+```
+
+#### Database Tables Included
+
+| Table | Description | Key Fields |
+|-------|-------------|------------|
+| `users` | User accounts | username, password (bcrypt hashed), is_admin, openai_api_key (AES encrypted), settings |
+| `filaments` | Filament inventory | name, manufacturer, material, color, weight, temps, storage location, image_url, notes |
+| `manufacturers` | Manufacturer list | name, sort_order |
+| `materials` | Material types | name, sort_order |
+| `colors` | Color definitions | name, hex code |
+| `diameters` | Filament diameters | value (1.75, 2.85) |
+| `storage_locations` | Storage locations | name, description, capacity |
+| `user_sharing` | Sharing settings | user_id, material_id, is_public |
+
+#### Users Table Details
+
+| Field | Description | Security |
+|-------|-------------|----------|
+| `id` | Unique user ID | - |
+| `username` | Login username | Plain text |
+| `password` | Login password | **Bcrypt hashed** (cannot be reversed) |
+| `is_admin` | Admin privileges | Boolean |
+| `force_change_password` | Must change password on login | Boolean |
+| `language` | UI language preference | en, de |
+| `currency` | Currency setting | EUR, USD, etc. |
+| `temperature_unit` | Temp display unit | C or F |
+| `openai_api_key` | User's OpenAI API key | **AES-256-GCM encrypted** |
+| `openai_model` | Selected AI model | gpt-4o, etc. |
+| `last_login` | Last login timestamp | DateTime |
+| `created_at` | Account creation date | DateTime |
+
+#### Filaments Table Details
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique filament ID |
+| `name` | Display name |
+| `manufacturer` | Brand/manufacturer |
+| `material` | Material type (PLA, PETG, etc.) |
+| `color_name` | Color name |
+| `color_code` | Hex color code |
+| `diameter` | Filament diameter (1.75, 2.85) |
+| `print_temp` | Recommended print temperature |
+| `bed_temp` | Recommended bed temperature |
+| `print_speed` | Recommended print speed |
+| `total_weight` | Spool weight in grams |
+| `remaining_percentage` | Percentage remaining |
+| `purchase_date` | When purchased |
+| `purchase_price` | Purchase cost |
+| `status` | sealed/opened |
+| `spool_type` | Spool type info |
+| `dryer_count` | Times dried |
+| `last_drying_date` | Last dried date |
+| `storage_location` | Main storage location |
+| `location_details` | Sub-location details |
+| `notes` | Additional notes |
+| `image_url` | Path to spool photo |
+| `user_id` | Owner user ID |
+| `created_at` | Entry creation date |
+| `updated_at` | Last modified date |
+
+#### Security Notes
+
+- **Passwords are bcrypt hashed** - Even with database access, passwords cannot be recovered
+- **API keys are AES-256-GCM encrypted** - Secure even if backup file is compromised
+- **Backup files are gitignored** - Never committed to repository
+- **Keep backups secure** - They contain all user data
 
 **Output:** `backups/filadex_prod_backup_YYYYMMDD_HHMMSS.zip`
 

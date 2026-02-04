@@ -185,6 +185,49 @@ The reset scripts pre-populate these storage locations (customize in the scripts
 - **No Plain Text Storage**: Keys are never stored or transmitted in plain text
 - **Per-User Keys**: Each user can have their own API key
 - **Session-based Auth**: Secure cookie-based authentication
+- **Bcrypt Passwords**: User passwords are securely hashed with bcrypt
+
+## 🗄️ Database Schema
+
+Filadex uses PostgreSQL with the following tables:
+
+| Table | Purpose |
+|-------|---------|
+| `users` | User accounts, credentials, and settings |
+| `filaments` | Filament inventory with all properties |
+| `manufacturers` | Filament brands/manufacturers |
+| `materials` | Material types (PLA, PETG, TPU, etc.) |
+| `colors` | Color definitions with hex codes |
+| `diameters` | Filament diameters (1.75mm, 2.85mm) |
+| `storage_locations` | Storage locations with capacity |
+| `user_sharing` | Public sharing settings |
+
+### Key Fields in Filaments Table
+
+| Field | Description |
+|-------|-------------|
+| `name` | Display name for the spool |
+| `manufacturer` | Brand (Bambu Lab, Sunlu, etc.) |
+| `material` | Type (PLA, PETG, TPU 95A, etc.) |
+| `color_name`, `color_code` | Color and hex code |
+| `diameter` | 1.75 or 2.85mm |
+| `print_temp`, `bed_temp`, `print_speed` | Print settings |
+| `total_weight`, `remaining_percentage` | Weight tracking |
+| `status` | "sealed" or "opened" |
+| `storage_location`, `location_details` | Where it's stored |
+| `image_url` | Path to uploaded photo |
+| `notes` | Additional notes |
+| `purchase_date`, `purchase_price` | Purchase info |
+
+### Security in Database
+
+| Data | Protection |
+|------|------------|
+| User passwords | Bcrypt hashed (irreversible) |
+| OpenAI API keys | AES-256-GCM encrypted |
+| Session tokens | HTTP-only secure cookies |
+
+For complete schema details, see `shared/schema.ts`.
 
 ## 🤝 Contributing
 
