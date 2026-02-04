@@ -694,6 +694,8 @@ const translations = {
     processingPhotos: 'Processing photos with AI...',
     photosProcessed: '{{count}} photo(s) ready for review',
     viewResults: 'View Results',
+    clearAll: 'Clear All',
+    confirmClearAll: 'Clear all pending imports?',
     imagePreview: 'Image Preview',
     extractedFields: 'Extracted Fields',
     editBeforeImport: 'Edit values before importing',

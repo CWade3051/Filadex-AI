@@ -87,7 +87,20 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   
   const [activeTab, setActiveTab] = useState<"upload" | "mobile" | "review">("upload");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [processedImages, setProcessedImages] = useState<ProcessedImage[]>([]);
+  
+  // Load persisted processed images from localStorage on init
+  const [processedImages, setProcessedImages] = useState<ProcessedImage[]>(() => {
+    try {
+      const saved = localStorage.getItem('filadex_pending_imports');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Failed to load saved imports:', e);
+    }
+    return [];
+  });
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 });
   const [mobileSession, setMobileSession] = useState<{
@@ -99,8 +112,27 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   const [isPolling, setIsPolling] = useState(false);
   const [pendingPhotoCount, setPendingPhotoCount] = useState(0); // Photos uploaded but not yet processed
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const processingPollingRef = useRef<NodeJS.Timeout | null>(null); // For polling processing results
   const lastImageCountRef = useRef(0); // Track image count to detect new uploads
   const processedImageUrlsRef = useRef<Set<string>>(new Set()); // Track which images we've already processed
+  
+  // Persist processed images to localStorage
+  useEffect(() => {
+    try {
+      if (processedImages.length > 0) {
+        localStorage.setItem('filadex_pending_imports', JSON.stringify(processedImages));
+      } else {
+        localStorage.removeItem('filadex_pending_imports');
+      }
+    } catch (e) {
+      console.error('Failed to save imports:', e);
+    }
+  }, [processedImages]);
+  
+  // Function to delete an item from review
+  const handleDeleteFromReview = (index: number) => {
+    setProcessedImages(prev => prev.filter((_, i) => i !== index));
+  };
   
   // Image preview state
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -180,28 +212,30 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     { value: "3", label: "3kg" },
   ];
 
-  // Clean up on close - but preserve mobile session if active
+  // Clean up on close - preserve processedImages (persisted in localStorage)
   useEffect(() => {
     if (!isOpen) {
       setSelectedFiles([]);
-      // Only reset if NO active mobile session with results
-      // This preserves state when user closes and reopens during mobile upload
-      if (!mobileSession || processedImages.length === 0) {
-        setProcessedImages([]);
-        setMobileSession(null);
-        setIsPolling(false);
-        setPendingPhotoCount(0);
-        lastImageCountRef.current = 0;
-        processedImageUrlsRef.current = new Set();
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
+      // Keep processedImages - they're persisted in localStorage
+      // Only reset session-related state
+      setMobileSession(null);
+      setIsPolling(false);
+      setPendingPhotoCount(0);
+      lastImageCountRef.current = 0;
+      processedImageUrlsRef.current = new Set();
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      if (processingPollingRef.current) {
+        clearInterval(processingPollingRef.current);
+        processingPollingRef.current = null;
       }
       setIsProcessing(false);
-      setActiveTab("upload");
+      // Go to review tab if there are pending items, otherwise upload
+      setActiveTab(processedImages.length > 0 ? "review" : "upload");
     }
-  }, [isOpen, mobileSession, processedImages.length]);
+  }, [isOpen, processedImages.length]);
   
   // Resume polling when modal reopens with active session
   useEffect(() => {
@@ -368,7 +402,71 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     }, 3000);
   };
 
-  // Process mobile session images
+  // Start polling for processing results (incremental)
+  const startProcessingPolling = (token: string) => {
+    if (processingPollingRef.current) {
+      clearInterval(processingPollingRef.current);
+    }
+    
+    processingPollingRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/ai/upload-session/${token}`, {
+          credentials: "include",
+        });
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Update progress
+          setPendingPhotoCount(data.pendingCount || 0);
+          setProcessingProgress({
+            current: data.processedCount || 0,
+            total: data.imageCount || 0,
+          });
+          
+          // Add newly processed images to review
+          const processedResults = data.images.filter((img: any) => img.extractedData || img.error);
+          if (processedResults.length > 0) {
+            const newProcessed: ProcessedImage[] = processedResults.map((result: any) => ({
+              imageUrl: result.imageUrl,
+              extractedData: result.extractedData,
+              error: result.error,
+              selected: !result.error && result.extractedData?.confidence > 0.3,
+              notes: result.extractedData?.notes || "",
+              storageLocation: "",
+              status: result.extractedData?.isSealed !== false ? "sealed" : "opened",
+              remainingPercentage: 100,
+              lastDryingDate: "",
+            }));
+            
+            setProcessedImages(prev => {
+              const existingUrls = new Set(prev.map(p => p.imageUrl));
+              const trulyNew = newProcessed.filter(p => !existingUrls.has(p.imageUrl));
+              if (trulyNew.length > 0) {
+                return [...prev, ...trulyNew];
+              }
+              return prev;
+            });
+          }
+          
+          // Check if all done
+          if (!data.processing && data.pendingCount === 0) {
+            if (processingPollingRef.current) {
+              clearInterval(processingPollingRef.current);
+              processingPollingRef.current = null;
+            }
+            setIsProcessing(false);
+            if (processedResults.length > 0) {
+              setActiveTab("review");
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Processing polling error:", error);
+      }
+    }, 2000); // Poll every 2 seconds for faster updates
+  };
+
+  // Process mobile session images - starts processing and polls for results
   const processMobileSessionMutation = useMutation({
     mutationFn: async (token: string) => {
       const response = await fetch(`/api/ai/upload-session/${token}/process`, {
@@ -379,32 +477,17 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         const error = await response.json();
         throw new Error(error.message);
       }
-      return response.json();
+      return { ...await response.json(), token };
     },
     onSuccess: (data) => {
-      const newProcessed: ProcessedImage[] = data.results.map((result: any) => ({
-        imageUrl: result.imageUrl,
-        extractedData: result.extractedData,
-        error: result.error,
-        selected: !result.error && result.extractedData?.confidence > 0.3,
-        notes: result.extractedData?.notes || "", // Use AI-extracted notes
-        storageLocation: "",
-        status: result.extractedData?.isSealed !== false ? "sealed" : "opened",
-        remainingPercentage: 100,
-        lastDryingDate: "",
-      }));
-      
-      // Append new results to existing ones (for incremental uploads)
-      // Filter out any that are already in the list by imageUrl
-      setProcessedImages(prev => {
-        const existingUrls = new Set(prev.map(p => p.imageUrl));
-        const trulyNew = newProcessed.filter(p => !existingUrls.has(p.imageUrl));
-        return [...prev, ...trulyNew];
+      // Server now returns immediately, so start polling for results
+      setProcessingProgress({
+        current: data.processedCount || 0,
+        total: data.totalCount || 0,
       });
       
-      setPendingPhotoCount(0); // Clear pending count after processing
-      setActiveTab("review");
-      setIsProcessing(false);
+      // Start polling for incremental results
+      startProcessingPolling(data.token);
     },
     onError: (error: Error) => {
       toast({
@@ -891,22 +974,39 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 <span className="text-sm">
                   {selectedCount} of {processedImages.length} selected for import
                 </span>
-                <Button
-                  onClick={handleImport}
-                  disabled={selectedCount === 0 || importFilamentsMutation.isPending}
-                >
-                  {importFilamentsMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Importing...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-4 w-4 mr-2" />
-                      {t("ai.importSelected")} ({selectedCount})
-                    </>
+                <div className="flex items-center gap-2">
+                  {processedImages.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm(t("ai.confirmClearAll") || "Clear all pending imports?")) {
+                          setProcessedImages([]);
+                        }
+                      }}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      {t("ai.clearAll") || "Clear All"}
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    onClick={handleImport}
+                    disabled={selectedCount === 0 || importFilamentsMutation.isPending}
+                  >
+                    {importFilamentsMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        {t("ai.importSelected")} ({selectedCount})
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-auto" style={{ maxHeight: 'calc(90vh - 220px)' }}>
@@ -967,8 +1067,17 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                                 {img.isExpanded ? (
                                   <ChevronUp className="h-4 w-4" />
                                 ) : (
-                                  <><Edit2 className="h-4 w-4 mr-1" /> Edit</>
+                                  <><Edit2 className="h-4 w-4 mr-1" /> {t("common.edit")}</>
                                 )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteFromReview(index)}
+                                className="h-8 px-2 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950"
+                                title={t("common.delete")}
+                              >
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>

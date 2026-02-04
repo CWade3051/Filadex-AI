@@ -694,6 +694,8 @@ const translations = {
     processingPhotos: 'Fotos werden mit KI verarbeitet...',
     photosProcessed: '{{count}} Foto(s) zur Überprüfung bereit',
     viewResults: 'Ergebnisse anzeigen',
+    clearAll: 'Alle löschen',
+    confirmClearAll: 'Alle ausstehenden Importe löschen?',
     imagePreview: 'Bildvorschau',
     extractedFields: 'Extrahierte Felder',
     editBeforeImport: 'Werte vor dem Import bearbeiten',

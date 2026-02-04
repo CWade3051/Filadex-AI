@@ -474,10 +474,16 @@ export function registerAIRoutes(app: Express): void {
         return res.status(410).json({ message: "Session expired" });
       }
       
+      const processedCount = session.images.filter(img => img.extractedData || img.error).length;
+      const pendingCount = session.images.filter(img => !img.extractedData && !img.error).length;
+      
       res.json({
         status: session.status,
         imageCount: session.images.length,
         images: session.images,
+        processedCount,
+        pendingCount,
+        processing: session.status === "processing",
         expiresAt: session.expiresAt.toISOString(),
       });
     } catch (error) {
@@ -531,7 +537,8 @@ export function registerAIRoutes(app: Express): void {
   });
   
   /**
-   * Process images from an upload session
+   * Process images from an upload session - starts processing and returns immediately
+   * Client should poll GET /api/ai/upload-session/:token to get results as they complete
    */
   app.post("/api/ai/upload-session/:token/process", authenticate, async (req: Request, res: Response) => {
     try {
@@ -546,8 +553,18 @@ export function registerAIRoutes(app: Express): void {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      if (session.images.length === 0) {
-        return res.status(400).json({ message: "No images to process" });
+      // Find images that haven't been processed yet
+      const unprocessedImages = session.images.filter(img => !img.extractedData && !img.error);
+      
+      if (unprocessedImages.length === 0) {
+        // All images already processed, just return current results
+        return res.json({
+          success: true,
+          results: session.images,
+          processing: false,
+          processedCount: session.images.length,
+          totalCount: session.images.length,
+        });
       }
       
       const apiKey = await getOpenAIKey(req.userId);
@@ -557,28 +574,50 @@ export function registerAIRoutes(app: Express): void {
         });
       }
       
-      session.status = "processing";
-      
-      // Process all images
-      for (const image of session.images) {
-        try {
-          const imagePath = path.join(uploadDir, image.filename);
-          const imageBuffer = fs.readFileSync(imagePath);
-          const base64Image = imageBuffer.toString("base64");
-          
-          const extractedData = await extractFilamentDataFromImage(base64Image, apiKey);
-          image.extractedData = extractedData;
-        } catch (error) {
-          image.error = error instanceof Error ? error.message : "Failed to process image";
-        }
+      // If already processing, just return current status
+      if (session.status === "processing") {
+        const processedCount = session.images.filter(img => img.extractedData || img.error).length;
+        return res.json({
+          success: true,
+          results: session.images.filter(img => img.extractedData || img.error),
+          processing: true,
+          processedCount,
+          totalCount: session.images.length,
+        });
       }
       
-      session.status = "completed";
+      session.status = "processing";
       
+      // Return immediately with current status
       res.json({
         success: true,
-        results: session.images,
+        results: session.images.filter(img => img.extractedData || img.error),
+        processing: true,
+        processedCount: session.images.filter(img => img.extractedData || img.error).length,
+        totalCount: session.images.length,
       });
+      
+      // Process images one at a time in the background
+      (async () => {
+        for (const image of unprocessedImages) {
+          try {
+            const imagePath = path.join(uploadDir, image.filename);
+            const imageBuffer = fs.readFileSync(imagePath);
+            const base64Image = imageBuffer.toString("base64");
+            
+            const extractedData = await extractFilamentDataFromImage(base64Image, apiKey);
+            image.extractedData = extractedData;
+            logger.info(`Processed image: ${image.filename}`);
+          } catch (error) {
+            image.error = error instanceof Error ? error.message : "Failed to process image";
+            logger.error(`Error processing image ${image.filename}:`, error);
+          }
+        }
+        
+        session.status = "completed";
+        logger.info(`Session ${token} processing complete. ${session.images.length} images processed.`);
+      })();
+      
     } catch (error) {
       logger.error("Error processing session images:", error);
       res.status(500).json({ message: "Failed to process images" });
