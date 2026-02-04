@@ -507,25 +507,35 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             total: data.imageCount || 0,
           });
           
-          // Add newly processed images to review
+          // Add newly processed images to review (only if not already processed/imported)
           const processedResults = data.images.filter((img: any) => img.extractedData || img.error);
           if (processedResults.length > 0) {
-            const newProcessed: ProcessedImage[] = processedResults.map((result: any) => ({
-              imageUrl: result.imageUrl,
-              extractedData: result.extractedData,
-              error: result.error,
-              selected: !result.error && result.extractedData?.confidence > 0.3,
-              notes: result.extractedData?.notes || "",
-              storageLocation: "",
-              status: result.extractedData?.isSealed !== false ? "sealed" : "opened",
-              remainingPercentage: 100,
-              lastDryingDate: "",
-            }));
-            
             setProcessedImages(prev => {
               const existingUrls = new Set(prev.map(p => p.imageUrl));
-              const trulyNew = newProcessed.filter(p => !existingUrls.has(p.imageUrl));
+              
+              // Filter out images already in the list OR already in our processed tracking ref
+              const trulyNew = processedResults
+                .filter((result: any) => 
+                  !existingUrls.has(result.imageUrl) && 
+                  !processedImageUrlsRef.current.has(result.imageUrl)
+                )
+                .map((result: any) => ({
+                  imageUrl: result.imageUrl,
+                  extractedData: result.extractedData,
+                  error: result.error,
+                  selected: !result.error && result.extractedData?.confidence > 0.3,
+                  notes: result.extractedData?.notes || "",
+                  storageLocation: "",
+                  status: result.extractedData?.isSealed !== false ? "sealed" : "opened",
+                  remainingPercentage: 100,
+                  lastDryingDate: "",
+                }));
+              
               if (trulyNew.length > 0) {
+                // Add new URLs to tracking ref
+                trulyNew.forEach((p: ProcessedImage) => {
+                  processedImageUrlsRef.current.add(p.imageUrl);
+                });
                 return [...prev, ...trulyNew];
               }
               return prev;
@@ -630,8 +640,17 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         });
       }
       
-      // Remove imported images from the review list
-      setProcessedImages(prev => prev.filter(img => !img.selected));
+      // Mark imported images as permanently processed (add to tracking ref)
+      // This prevents them from being re-added if polling continues
+      setProcessedImages(prev => {
+        prev.filter(img => img.selected).forEach(img => {
+          if (img.imageUrl) {
+            processedImageUrlsRef.current.add(img.imageUrl);
+          }
+        });
+        // Then remove them from the list
+        return prev.filter(img => !img.selected);
+      });
       
       onImportComplete();
       
