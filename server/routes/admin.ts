@@ -22,6 +22,7 @@ import {
 } from "../../shared/schema";
 import { authenticate, isAdmin, hashPassword } from "../auth";
 import { logger as appLogger } from "../utils/logger";
+import { encrypt, isValidOpenAIKeyFormat } from "../utils/encryption";
 import fs from "fs";
 import path from "path";
 
@@ -95,11 +96,17 @@ export function registerAdminRoutes(app: Express): void {
 
       // Create default admin user
       const hashedPassword = await hashPassword("admin123");
+      const envApiKey = process.env.OPENAI_API_KEY;
+      const encryptedEnvKey = envApiKey && isValidOpenAIKeyFormat(envApiKey)
+        ? encrypt(envApiKey)
+        : undefined;
+
       await db.insert(users).values({
         username: "admin",
         password: hashedPassword,
         isAdmin: true,
         forceChangePassword: true,
+        ...(encryptedEnvKey ? { openaiApiKey: encryptedEnvKey } : {}),
       });
 
       // Seed manufacturers
