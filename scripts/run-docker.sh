@@ -8,6 +8,14 @@ cd "$(dirname "$0")/.."
 
 echo "🚀 Starting Filadex Production Docker Environment..."
 
+# Load OPENAI_API_KEY from .env to avoid stale shell exports
+if [ -f ".env" ]; then
+  OPENAI_FROM_ENV=$(grep "^OPENAI_API_KEY=" .env | cut -d'=' -f2-)
+  if [ -n "$OPENAI_FROM_ENV" ]; then
+    export OPENAI_API_KEY="$OPENAI_FROM_ENV"
+  fi
+fi
+
 # Pull latest image
 echo "📦 Pulling latest Docker image..."
 docker compose -p filadex-prod pull
