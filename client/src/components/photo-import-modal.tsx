@@ -660,18 +660,24 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       
       onImportComplete();
       
-      // If mobile session is still active, stay open and show mobile tab
-      // Otherwise close the modal
-      if (mobileSession && isPolling) {
-        // Stay on mobile tab to allow more uploads
-        setActiveTab("mobile");
-        toast({
-          title: t("ai.sessionStillActive") || "Session Still Active",
-          description: t("ai.canUploadMore") || "You can continue uploading more photos from your phone.",
-        });
-      } else {
-        onClose();
+      // After successful import, stop polling and clear session to prevent re-detection issues
+      // User can generate a new QR code for the next batch
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
+      if (processingPollingRef.current) {
+        clearInterval(processingPollingRef.current);
+        processingPollingRef.current = null;
+      }
+      setIsPolling(false);
+      setMobileSession(null);
+      
+      // Clear detected URLs for next session
+      detectedUploadUrlsRef.current.clear();
+      
+      // Close the modal after successful import
+      onClose();
     },
   });
 
