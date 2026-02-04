@@ -716,6 +716,15 @@ export function registerCloudBackupRoutes(app: Express) {
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
       const archive = archiver("zip", { zlib: { level: 9 } });
+      
+      // Add error handling for archive
+      archive.on("error", (err) => {
+        appLogger.error("Archive error:", err);
+      });
+      archive.on("warning", (err) => {
+        appLogger.warn("Archive warning:", err);
+      });
+
       archive.pipe(res);
 
       // Add backup.json to the archive
@@ -725,6 +734,7 @@ export function registerCloudBackupRoutes(app: Express) {
       const imagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
       appLogger.info(`Backup: Looking for images in: ${imagesDir}`);
       appLogger.info(`Backup: Directory exists: ${fs.existsSync(imagesDir)}`);
+      appLogger.info(`Backup: Filaments count: ${backupData.data.filaments.length}`);
       
       if (fs.existsSync(imagesDir)) {
         // Get list of image URLs from user's filaments
@@ -733,14 +743,17 @@ export function registerCloudBackupRoutes(app: Express) {
           .filter((url: string | null) => url && url.startsWith("/uploads/filaments/"));
 
         appLogger.info(`Backup: Found ${userImageUrls.length} image URLs in filaments`);
-        appLogger.info(`Backup: Sample filament data: ${JSON.stringify(backupData.data.filaments[0])}`);
+        if (backupData.data.filaments.length > 0) {
+          appLogger.info(`Backup: First filament imageUrl: ${backupData.data.filaments[0]?.imageUrl}`);
+        }
 
         let imagesAdded = 0;
         for (const imageUrl of userImageUrls) {
           const imageName = path.basename(imageUrl);
           const imagePath = path.join(imagesDir, imageName);
-          appLogger.info(`Backup: Checking image: ${imagePath}, exists: ${fs.existsSync(imagePath)}`);
-          if (fs.existsSync(imagePath)) {
+          const exists = fs.existsSync(imagePath);
+          appLogger.info(`Backup: Image ${imageName} exists: ${exists}`);
+          if (exists) {
             archive.file(imagePath, { name: `images/${imageName}` });
             imagesAdded++;
           }
@@ -749,6 +762,7 @@ export function registerCloudBackupRoutes(app: Express) {
       }
 
       await archive.finalize();
+      appLogger.info("Backup: Archive finalized successfully");
     } catch (error) {
       appLogger.error("Error generating backup:", error);
       res.status(500).json({ message: "Failed to generate backup" });
