@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { count } from "drizzle-orm";
 import { db } from "../db";
 import {
   users,
@@ -189,9 +190,9 @@ export function registerAdminRoutes(app: Express): void {
   app.get("/api/admin/system-info", authenticate, isAdmin, async (_req: Request, res: Response) => {
     try {
       // Get counts from all tables
-      const [userCount] = await db.select({ count: users.id }).from(users);
-      const [filamentCount] = await db.select({ count: filaments.id }).from(filaments);
-      const [printJobCount] = await db.select({ count: printJobs.id }).from(printJobs);
+      const [userCount] = await db.select({ value: count() }).from(users);
+      const [filamentCount] = await db.select({ value: count() }).from(filaments);
+      const [printJobCount] = await db.select({ value: count() }).from(printJobs);
       
       // Count uploaded files
       const filamentsImagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
@@ -210,9 +211,9 @@ export function registerAdminRoutes(app: Express): void {
 
       res.json({
         database: {
-          users: userCount?.count || 0,
-          filaments: filamentCount?.count || 0,
-          printJobs: printJobCount?.count || 0,
+          users: userCount?.value || 0,
+          filaments: filamentCount?.value || 0,
+          printJobs: printJobCount?.value || 0,
         },
         files: {
           images: imageCount,
