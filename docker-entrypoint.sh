@@ -120,6 +120,22 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS public.printers (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    manufacturer TEXT,
+    model TEXT,
+    sort_order INTEGER DEFAULT 999,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS public.slicers (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    sort_order INTEGER DEFAULT 999,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS public.filaments (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -520,6 +536,18 @@ else
         INSERT INTO public.storage_locations (name, description, capacity) VALUES ('FLSUN S1 Pro', 'Spool attached to FLSUN S1 Pro printer, acts as dryer', 1) ON CONFLICT DO NOTHING;
         INSERT INTO public.storage_locations (name, description, capacity) VALUES ('Creality Dryer', 'Creality dryer unit, holds up to 2 spools', 2) ON CONFLICT DO NOTHING;
         INSERT INTO public.storage_locations (name, description, capacity) VALUES ('Polymaker Dryer', 'Polymaker dryer unit, holds 1 spool', 1) ON CONFLICT DO NOTHING;
+        
+        -- Slicers
+        INSERT INTO public.slicers (name) VALUES ('Bambu Studio') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('Orca Slicer') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('PrusaSlicer') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('Cura') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('SuperSlicer') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('Simplify3D') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('IdeaMaker') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('FlashPrint') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('Creality Print') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name) VALUES ('FLSUN Slicer') ON CONFLICT DO NOTHING;
       "
       echo "Basic data inserted!"
 

@@ -12,6 +12,8 @@ import {
   colors,
   diameters,
   storageLocations,
+  printers,
+  slicers,
   printJobs,
   slicerProfiles,
   materialCompatibility,
@@ -149,10 +151,12 @@ async function generateBackupData(userId: number) {
   const allColors = await db.select().from(colors);
   const allDiameters = await db.select().from(diameters);
   const allLocations = await db.select().from(storageLocations);
+  const allPrinters = await db.select().from(printers);
+  const allSlicers = await db.select().from(slicers);
   const allCompatibility = await db.select().from(materialCompatibility);
 
   return {
-    version: "1.2",
+    version: "1.3",
     backupType: "user",
     exportedAt: new Date().toISOString(),
     userSettings: user || {},
@@ -170,6 +174,8 @@ async function generateBackupData(userId: number) {
       colors: allColors,
       diameters: allDiameters,
       storageLocations: allLocations,
+      printers: allPrinters,
+      slicers: allSlicers,
       materialCompatibility: allCompatibility,
     },
   };
@@ -204,10 +210,12 @@ async function generateAdminBackupData() {
   const allColors = await db.select().from(colors);
   const allDiameters = await db.select().from(diameters);
   const allLocations = await db.select().from(storageLocations);
+  const allPrinters = await db.select().from(printers);
+  const allSlicers = await db.select().from(slicers);
   const allCompatibility = await db.select().from(materialCompatibility);
 
   return {
-    version: "1.2",
+    version: "1.3",
     backupType: "admin_full",
     exportedAt: new Date().toISOString(),
     data: {
@@ -226,6 +234,8 @@ async function generateAdminBackupData() {
       colors: allColors,
       diameters: allDiameters,
       storageLocations: allLocations,
+      printers: allPrinters,
+      slicers: allSlicers,
       materialCompatibility: allCompatibility,
     },
   };

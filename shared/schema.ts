@@ -130,6 +130,24 @@ export const storageLocations = pgTable("storage_locations", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
+// Printers list for print job logging
+export const printers = pgTable("printers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  manufacturer: text("manufacturer"), // e.g., "Bambu Lab", "Creality", "Prusa"
+  model: text("model"), // e.g., "X1 Carbon", "Ender 3", "MK4"
+  sortOrder: integer("sort_order").default(999),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+// Slicers list for print job logging
+export const slicers = pgTable("slicers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  sortOrder: integer("sort_order").default(999),
+  createdAt: timestamp("created_at").defaultNow()
+});
+
 // Insert-Schemas für die neuen Listen
 export const insertManufacturerSchema = createInsertSchema(manufacturers).omit({
   id: true,
@@ -164,6 +182,18 @@ export const insertStorageLocationSchema = createInsertSchema(storageLocations).
   sortOrder: true,
 });
 
+export const insertPrinterSchema = createInsertSchema(printers).omit({
+  id: true,
+  createdAt: true,
+  sortOrder: true,
+});
+
+export const insertSlicerSchema = createInsertSchema(slicers).omit({
+  id: true,
+  createdAt: true,
+  sortOrder: true,
+});
+
 // Typen für die neuen Listen
 export type InsertManufacturer = z.infer<typeof insertManufacturerSchema>;
 export type Manufacturer = typeof manufacturers.$inferSelect;
@@ -179,6 +209,12 @@ export type Diameter = typeof diameters.$inferSelect;
 
 export type InsertStorageLocation = z.infer<typeof insertStorageLocationSchema>;
 export type StorageLocation = typeof storageLocations.$inferSelect;
+
+export type InsertPrinter = z.infer<typeof insertPrinterSchema>;
+export type Printer = typeof printers.$inferSelect;
+
+export type InsertSlicer = z.infer<typeof insertSlicerSchema>;
+export type Slicer = typeof slicers.$inferSelect;
 
 // User sharing settings
 export const userSharing = pgTable("user_sharing", {

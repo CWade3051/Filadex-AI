@@ -6,7 +6,9 @@ import {
   insertMaterialSchema,
   insertColorSchema,
   insertDiameterSchema,
-  insertStorageLocationSchema
+  insertStorageLocationSchema,
+  insertPrinterSchema,
+  insertSlicerSchema
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -727,6 +729,148 @@ export function registerSettingsRoutes(app: Express): void {
     } catch (error) {
       appLogger.error("Error updating storage location order:", error);
       res.status(500).json({ message: "Failed to update storage location order" });
+    }
+  });
+
+  // ===== PRINTERS =====
+
+  app.get("/api/printers", authenticate, async (req, res) => {
+    try {
+      const printerList = await storage.getPrinters();
+      res.json(printerList);
+    } catch (error) {
+      appLogger.error("Error fetching printers:", error);
+      res.status(500).json({ message: "Failed to fetch printers" });
+    }
+  });
+
+  app.post("/api/printers", authenticate, async (req, res) => {
+    try {
+      const data = req.body;
+      const validatedData = insertPrinterSchema.parse(data);
+      const newPrinter = await storage.createPrinter(validatedData);
+      res.status(201).json(newPrinter);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      appLogger.error("Error creating printer:", error);
+      res.status(500).json({ message: "Failed to create printer" });
+    }
+  });
+
+  app.delete("/api/printers/:id", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid printer ID" });
+      }
+
+      const success = await storage.deletePrinter(id);
+      if (!success) {
+        return res.status(404).json({ message: "Printer not found" });
+      }
+
+      res.status(200).json({ success: true, message: "Printer deleted" });
+    } catch (error) {
+      appLogger.error("Error deleting printer:", error);
+      res.status(500).json({ message: "Failed to delete printer" });
+    }
+  });
+
+  app.patch("/api/printers/:id/order", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid printer ID" });
+      }
+
+      const { newOrder } = req.body;
+      if (typeof newOrder !== 'number') {
+        return res.status(400).json({ message: "newOrder must be a number" });
+      }
+
+      const updatedPrinter = await storage.updatePrinterOrder(id, newOrder);
+      if (!updatedPrinter) {
+        return res.status(404).json({ message: "Printer not found" });
+      }
+
+      res.json(updatedPrinter);
+    } catch (error) {
+      appLogger.error("Error updating printer order:", error);
+      res.status(500).json({ message: "Failed to update printer order" });
+    }
+  });
+
+  // ===== SLICERS =====
+
+  app.get("/api/slicers", authenticate, async (req, res) => {
+    try {
+      const slicerList = await storage.getSlicers();
+      res.json(slicerList);
+    } catch (error) {
+      appLogger.error("Error fetching slicers:", error);
+      res.status(500).json({ message: "Failed to fetch slicers" });
+    }
+  });
+
+  app.post("/api/slicers", authenticate, async (req, res) => {
+    try {
+      const data = req.body;
+      const validatedData = insertSlicerSchema.parse(data);
+      const newSlicer = await storage.createSlicer(validatedData);
+      res.status(201).json(newSlicer);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      appLogger.error("Error creating slicer:", error);
+      res.status(500).json({ message: "Failed to create slicer" });
+    }
+  });
+
+  app.delete("/api/slicers/:id", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid slicer ID" });
+      }
+
+      const success = await storage.deleteSlicer(id);
+      if (!success) {
+        return res.status(404).json({ message: "Slicer not found" });
+      }
+
+      res.status(200).json({ success: true, message: "Slicer deleted" });
+    } catch (error) {
+      appLogger.error("Error deleting slicer:", error);
+      res.status(500).json({ message: "Failed to delete slicer" });
+    }
+  });
+
+  app.patch("/api/slicers/:id/order", authenticate, async (req, res) => {
+    try {
+      const id = validateId(req.params.id);
+      if (id === null) {
+        return res.status(400).json({ message: "Invalid slicer ID" });
+      }
+
+      const { newOrder } = req.body;
+      if (typeof newOrder !== 'number') {
+        return res.status(400).json({ message: "newOrder must be a number" });
+      }
+
+      const updatedSlicer = await storage.updateSlicerOrder(id, newOrder);
+      if (!updatedSlicer) {
+        return res.status(404).json({ message: "Slicer not found" });
+      }
+
+      res.json(updatedSlicer);
+    } catch (error) {
+      appLogger.error("Error updating slicer order:", error);
+      res.status(500).json({ message: "Failed to update slicer order" });
     }
   });
 }

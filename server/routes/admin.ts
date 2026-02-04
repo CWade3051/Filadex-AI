@@ -9,6 +9,8 @@ import {
   colors,
   diameters,
   storageLocations,
+  printers,
+  slicers,
   userSharing,
   printJobs,
   filamentHistory,
@@ -57,6 +59,8 @@ export function registerAdminRoutes(app: Express): void {
       await db.delete(colors);
       await db.delete(diameters);
       await db.delete(storageLocations);
+      await db.delete(printers);
+      await db.delete(slicers);
 
       appLogger.info("All database tables cleared.");
 
@@ -166,6 +170,15 @@ export function registerAdminRoutes(app: Express): void {
       ];
       for (const location of defaultStorageLocations) {
         await db.insert(storageLocations).values(location).onConflictDoNothing();
+      }
+
+      // Seed slicers
+      const defaultSlicers = [
+        "Bambu Studio", "Orca Slicer", "PrusaSlicer", "Cura", "SuperSlicer",
+        "Simplify3D", "IdeaMaker", "FlashPrint", "Creality Print", "FLSUN Slicer"
+      ];
+      for (const name of defaultSlicers) {
+        await db.insert(slicers).values({ name }).onConflictDoNothing();
       }
 
       appLogger.info("Default data seeded successfully.");

@@ -5,6 +5,8 @@ import {
   colors, type Color, type InsertColor,
   diameters, type Diameter, type InsertDiameter,
   storageLocations, type StorageLocation, type InsertStorageLocation,
+  printers, type Printer, type InsertPrinter,
+  slicers, type Slicer, type InsertSlicer,
   printJobs, type PrintJob, type InsertPrintJob,
   filamentHistory, type FilamentHistory, type InsertFilamentHistory,
   slicerProfiles, type SlicerProfile, type InsertSlicerProfile
@@ -62,6 +64,18 @@ export interface IStorage {
   createStorageLocation(location: InsertStorageLocation): Promise<StorageLocation>;
   deleteStorageLocation(id: number): Promise<boolean>;
   updateStorageLocationOrder(id: number, newOrder: number): Promise<StorageLocation | undefined>;
+
+  // Printer operations
+  getPrinters(): Promise<Printer[]>;
+  createPrinter(printer: InsertPrinter): Promise<Printer>;
+  deletePrinter(id: number): Promise<boolean>;
+  updatePrinterOrder(id: number, newOrder: number): Promise<Printer | undefined>;
+
+  // Slicer (software) operations
+  getSlicers(): Promise<Slicer[]>;
+  createSlicer(slicer: InsertSlicer): Promise<Slicer>;
+  deleteSlicer(id: number): Promise<boolean>;
+  updateSlicerOrder(id: number, newOrder: number): Promise<Slicer | undefined>;
 
   // Slicer Profile operations
   getSlicerProfiles(userId: number): Promise<SlicerProfile[]>;
@@ -358,6 +372,66 @@ export class DatabaseStorage implements IStorage {
       .update(storageLocations)
       .set({ sortOrder: newOrder })
       .where(eq(storageLocations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Printer implementations
+  async getPrinters(): Promise<Printer[]> {
+    return await db.select().from(printers);
+  }
+
+  async createPrinter(insertPrinter: InsertPrinter): Promise<Printer> {
+    const [printer] = await db
+      .insert(printers)
+      .values(insertPrinter)
+      .returning();
+    return printer;
+  }
+
+  async deletePrinter(id: number): Promise<boolean> {
+    const [deleted] = await db
+      .delete(printers)
+      .where(eq(printers.id, id))
+      .returning();
+    return !!deleted;
+  }
+
+  async updatePrinterOrder(id: number, newOrder: number): Promise<Printer | undefined> {
+    const [updated] = await db
+      .update(printers)
+      .set({ sortOrder: newOrder })
+      .where(eq(printers.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Slicer (software) implementations
+  async getSlicers(): Promise<Slicer[]> {
+    return await db.select().from(slicers);
+  }
+
+  async createSlicer(insertSlicer: InsertSlicer): Promise<Slicer> {
+    const [slicer] = await db
+      .insert(slicers)
+      .values(insertSlicer)
+      .returning();
+    return slicer;
+  }
+
+  async deleteSlicer(id: number): Promise<boolean> {
+    const [deleted] = await db
+      .delete(slicers)
+      .where(eq(slicers.id, id))
+      .returning();
+    return !!deleted;
+  }
+
+  async updateSlicerOrder(id: number, newOrder: number): Promise<Slicer | undefined> {
+    const [updated] = await db
+      .update(slicers)
+      .set({ sortOrder: newOrder })
+      .where(eq(slicers.id, id))
       .returning();
     return updated || undefined;
   }
