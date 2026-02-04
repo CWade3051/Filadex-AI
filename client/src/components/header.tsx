@@ -20,6 +20,7 @@ import {
   Printer,
   Grid3X3,
   Cloud,
+  RotateCcw,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -41,6 +42,7 @@ import { PrintJobModal } from "./print-job-modal";
 import { MaterialCompatibilityMatrix } from "./material-compatibility";
 import { SlicerProfiles } from "./slicer-profiles";
 import { CloudBackup } from "./cloud-backup";
+import { FactoryResetModal } from "./factory-reset-modal";
 import { Link, useLocation } from "wouter";
 import { Logo } from "./logo";
 import { useAuth } from "@/lib/auth";
@@ -76,6 +78,7 @@ export function Header({
   const [compatibilityMatrixOpen, setCompatibilityMatrixOpen] = useState(false);
   const [slicerProfilesOpen, setSlicerProfilesOpen] = useState(false);
   const [cloudBackupOpen, setCloudBackupOpen] = useState(false);
+  const [factoryResetOpen, setFactoryResetOpen] = useState(false);
   const { isAdmin, logout } = useAuth();
   const [_, navigate] = useLocation();
   const { t } = useTranslation();
@@ -196,10 +199,20 @@ export function Header({
                 {t('filaments.sharedCollection')}
               </DropdownMenuItem>
               {isAdmin && (
-                <DropdownMenuItem onClick={() => setUserManagementOpen(true)}>
-                  <Users className="mr-2 h-4 w-4" />
-                  {t('users.management')}
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={() => setUserManagementOpen(true)}>
+                    <Users className="mr-2 h-4 w-4" />
+                    {t('users.management')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => setFactoryResetOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Factory Reset
+                  </DropdownMenuItem>
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -305,6 +318,11 @@ export function Header({
       <CloudBackup
         open={cloudBackupOpen}
         onOpenChange={setCloudBackupOpen}
+      />
+
+      <FactoryResetModal
+        isOpen={factoryResetOpen}
+        onClose={() => setFactoryResetOpen(false)}
       />
     </header>
   );

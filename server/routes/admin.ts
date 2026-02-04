@@ -1,0 +1,231 @@
+import type { Express, Request, Response } from "express";
+import { db } from "../db";
+import {
+  users,
+  filaments,
+  manufacturers,
+  materials,
+  colors,
+  diameters,
+  storageLocations,
+  userSharing,
+  printJobs,
+  filamentHistory,
+  materialCompatibility,
+  slicerProfiles,
+  cloudBackupConfigs,
+  backupHistory,
+} from "../../shared/schema";
+import { authenticate, isAdmin, hashPassword } from "../auth";
+import { logger as appLogger } from "../utils/logger";
+import fs from "fs";
+import path from "path";
+
+export function registerAdminRoutes(app: Express): void {
+  // Factory reset endpoint (admin only)
+  app.post("/api/admin/factory-reset", authenticate, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { confirmation } = req.body;
+
+      // Require exact confirmation text
+      if (confirmation !== "RESET ALL DATA") {
+        return res.status(400).json({ 
+          message: "Invalid confirmation. You must type 'RESET ALL DATA' exactly to proceed." 
+        });
+      }
+
+      appLogger.warn(`Factory reset initiated by user ID: ${req.userId}`);
+
+      // Step 1: Delete all data from tables (order matters due to foreign keys)
+      appLogger.info("Deleting all data from tables...");
+      
+      // Delete dependent tables first
+      await db.delete(filamentHistory);
+      await db.delete(printJobs);
+      await db.delete(slicerProfiles);
+      await db.delete(userSharing);
+      await db.delete(cloudBackupConfigs);
+      await db.delete(backupHistory);
+      await db.delete(materialCompatibility);
+      await db.delete(filaments);
+      await db.delete(users);
+      
+      // Delete reference tables
+      await db.delete(manufacturers);
+      await db.delete(materials);
+      await db.delete(colors);
+      await db.delete(diameters);
+      await db.delete(storageLocations);
+
+      appLogger.info("All database tables cleared.");
+
+      // Step 2: Delete uploaded files
+      appLogger.info("Deleting uploaded files...");
+      
+      const filamentsImagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
+      const slicerProfilesDir = path.join(process.cwd(), "uploads", "profiles");
+
+      // Delete filament images
+      if (fs.existsSync(filamentsImagesDir)) {
+        const files = fs.readdirSync(filamentsImagesDir);
+        for (const file of files) {
+          fs.unlinkSync(path.join(filamentsImagesDir, file));
+        }
+        appLogger.info(`Deleted ${files.length} filament images.`);
+      }
+
+      // Delete slicer profiles
+      if (fs.existsSync(slicerProfilesDir)) {
+        const files = fs.readdirSync(slicerProfilesDir);
+        for (const file of files) {
+          fs.unlinkSync(path.join(slicerProfilesDir, file));
+        }
+        appLogger.info(`Deleted ${files.length} slicer profiles.`);
+      }
+
+      // Step 3: Re-seed default data
+      appLogger.info("Seeding default data...");
+
+      // Create default admin user
+      const hashedPassword = await hashPassword("admin123");
+      await db.insert(users).values({
+        username: "admin",
+        password: hashedPassword,
+        isAdmin: true,
+        forceChangePassword: true,
+      });
+
+      // Seed manufacturers
+      const defaultManufacturers = [
+        "Bambu Lab", "Sunlu", "Polymaker", "Hatchbox", "eSUN", 
+        "Prusament", "Overture", "Inland", "Amazon Basics", "3D Solutech",
+        "MatterHackers", "ColorFabb", "Fillamentum", "Proto-pasta", "Ninjatek"
+      ];
+      for (const name of defaultManufacturers) {
+        await db.insert(manufacturers).values({ name }).onConflictDoNothing();
+      }
+
+      // Seed materials
+      const defaultMaterials = [
+        "PLA", "PLA Basic", "PLA+", "PLA Support", "PLA Silk", "PLA Matte",
+        "PLA-CF", "PLA Marble", "PLA Metal", "PLA Sparkle", "PLA Galaxy",
+        "PLA Glow", "PLA Wood", "PLA Translucent",
+        "PETG", "PETG Basic", "PETG-HF", "PETG-CF", "PETG Translucent",
+        "ABS", "ASA", "TPU", "TPU 95A", "TPU 80A", "TPU for AMS",
+        "PA", "PC", "Support For PLA/PETG"
+      ];
+      for (const name of defaultMaterials) {
+        await db.insert(materials).values({ name }).onConflictDoNothing();
+      }
+
+      // Seed diameters
+      await db.insert(diameters).values({ value: "1.75" }).onConflictDoNothing();
+      await db.insert(diameters).values({ value: "2.85" }).onConflictDoNothing();
+
+      // Seed colors
+      const defaultColors = [
+        { name: "Black", code: "#000000" },
+        { name: "White", code: "#FFFFFF" },
+        { name: "Red", code: "#FF0000" },
+        { name: "Blue", code: "#0000FF" },
+        { name: "Green", code: "#00FF00" },
+        { name: "Yellow", code: "#FFFF00" },
+        { name: "Orange", code: "#FFA500" },
+        { name: "Purple", code: "#800080" },
+        { name: "Pink", code: "#FFC0CB" },
+        { name: "Gray", code: "#808080" },
+        { name: "Silver", code: "#C0C0C0" },
+        { name: "Gold", code: "#FFD700" },
+        { name: "Brown", code: "#8B4513" },
+        { name: "Transparent", code: "#FFFFFF" },
+        { name: "Natural", code: "#F5F5DC" },
+        { name: "Cyan", code: "#00FFFF" },
+      ];
+      for (const color of defaultColors) {
+        await db.insert(colors).values(color).onConflictDoNothing();
+      }
+
+      // Seed storage locations
+      const defaultStorageLocations = [
+        { name: "A - Bedroom Shelf", description: "2 shelves: top has 3 rows x 5 high, bottom has 2 rows x 10", capacity: 45 },
+        { name: "B - Sealable Storage", description: "1 row deep, 2 rows high, 6 spools each", capacity: 12 },
+        { name: "C - Sealable Zip-up", description: "2 rows deep, 2 high, 6 spools each", capacity: 24 },
+        { name: "D - Sealable Zip-up", description: "2 rows deep, 2 high, 6 spools each", capacity: 24 },
+        { name: "E - Rod Above Printer", description: "1 row, 8 spools", capacity: 8 },
+        { name: "F - 9-Level Rack", description: "9 rows high, 6 spools each (1 row for mini spools)", capacity: 81 },
+        { name: "AMS HT - H2C 1", description: "AMS HT unit connected to H2C, acts as dryer", capacity: 1 },
+        { name: "AMS HT - H2C 2", description: "AMS HT unit connected to H2C, acts as dryer", capacity: 1 },
+        { name: "AMS HT - P2S", description: "AMS HT unit connected to P2S, acts as dryer", capacity: 1 },
+        { name: "AMS Pro 2 - H2C 1", description: "AMS Pro 2 unit connected to H2C, acts as dryer", capacity: 4 },
+        { name: "AMS Pro 2 - H2C 2", description: "AMS Pro 2 unit connected to H2C, acts as dryer", capacity: 4 },
+        { name: "AMS Pro 2 - P2S", description: "AMS Pro 2 unit connected to P2S, acts as dryer", capacity: 4 },
+        { name: "FLSUN S1 Pro", description: "Spool attached to FLSUN S1 Pro printer, acts as dryer", capacity: 1 },
+        { name: "Creality Dryer", description: "Creality dryer unit, holds up to 2 spools", capacity: 2 },
+        { name: "Polymaker Dryer", description: "Polymaker dryer unit, holds 1 spool", capacity: 1 },
+      ];
+      for (const location of defaultStorageLocations) {
+        await db.insert(storageLocations).values(location).onConflictDoNothing();
+      }
+
+      appLogger.info("Default data seeded successfully.");
+      appLogger.warn("Factory reset completed successfully.");
+
+      res.json({ 
+        success: true,
+        message: "Factory reset completed. All data has been deleted and default settings restored.",
+        defaultCredentials: {
+          username: "admin",
+          password: "admin123",
+          note: "You will be prompted to change this password on first login."
+        }
+      });
+    } catch (error) {
+      appLogger.error("Factory reset error:", error);
+      res.status(500).json({ message: "Factory reset failed. Please try again or use the shell scripts." });
+    }
+  });
+
+  // Get system info (admin only)
+  app.get("/api/admin/system-info", authenticate, isAdmin, async (_req: Request, res: Response) => {
+    try {
+      // Get counts from all tables
+      const [userCount] = await db.select({ count: users.id }).from(users);
+      const [filamentCount] = await db.select({ count: filaments.id }).from(filaments);
+      const [printJobCount] = await db.select({ count: printJobs.id }).from(printJobs);
+      
+      // Count uploaded files
+      const filamentsImagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
+      const slicerProfilesDir = path.join(process.cwd(), "uploads", "profiles");
+      
+      let imageCount = 0;
+      let profileCount = 0;
+      
+      if (fs.existsSync(filamentsImagesDir)) {
+        imageCount = fs.readdirSync(filamentsImagesDir).length;
+      }
+      
+      if (fs.existsSync(slicerProfilesDir)) {
+        profileCount = fs.readdirSync(slicerProfilesDir).length;
+      }
+
+      res.json({
+        database: {
+          users: userCount?.count || 0,
+          filaments: filamentCount?.count || 0,
+          printJobs: printJobCount?.count || 0,
+        },
+        files: {
+          images: imageCount,
+          slicerProfiles: profileCount,
+        },
+        environment: {
+          isDocker: fs.existsSync("/.dockerenv"),
+          nodeEnv: process.env.NODE_ENV || "development",
+        }
+      });
+    } catch (error) {
+      appLogger.error("Get system info error:", error);
+      res.status(500).json({ message: "Failed to get system info" });
+    }
+  });
+}
