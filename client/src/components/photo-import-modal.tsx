@@ -858,7 +858,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         ) : (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col overflow-hidden min-h-0">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="upload" disabled={isProcessing}>
+              <TabsTrigger value="upload">
                 <Upload className="h-4 w-4 mr-2" />
                 {t("ai.uploadPhotos")}
               </TabsTrigger>
