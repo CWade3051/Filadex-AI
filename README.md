@@ -1,10 +1,43 @@
-# Filadex - 3D Printing Filament Management System
+# Filadex-AI - 3D Printing Filament Management System
 
 <div align="center">
   <img src="public/logo.svg" alt="Filadex Logo" width="200" height="200" style="color: #4f46e5;">
 </div>
 
-Filadex is an open-source filament management system for 3D printing enthusiasts. Born from the need for a comprehensive solution to track and manage 3D printing filaments, Filadex offers a clean, intuitive interface for monitoring your filament inventory, usage statistics, and storage information. This project is fully AI-coded, showcasing the potential of AI-assisted development in creating practical, user-friendly applications.
+Filadex-AI is an enhanced fork of the open-source Filadex filament management system, featuring **AI-powered photo import** capabilities. Upload photos of your filament spools and let AI automatically extract manufacturer, material, color, print settings, and more. This project demonstrates the power of AI-assisted development and AI-powered features for practical applications.
+
+> **Fork of:** [Original Filadex](https://github.com/the-luddite/filadex)
+> **AI Features by:** Charles Wade
+
+## 🆕 AI-Powered Features
+
+### 📸 Photo Import with AI Vision
+- **Automatic Data Extraction**: Upload photos of filament spools and labels - AI extracts manufacturer, material, color, weight, print temp, print speed, bed temp, and more
+- **Brand Recognition**: AI recognizes major filament brands (Bambu Lab, Sunlu, Polymaker, Hatchbox, eSUN, Creality, Snapmaker, etc.) from spool appearance
+- **Handwritten Label Reading**: Can read handwritten notes on foil-wrapped spools
+- **Bulk Import**: Process multiple photos at once - upload 50+ spool photos and import them all
+- **Mobile Upload via QR Code**: Scan a QR code with your phone to upload photos directly from your camera roll
+- **Editable Fields**: Review and edit any AI-extracted data before import
+- **Smart Dropdowns**: All fields use dropdowns with existing values plus ability to add new entries
+- **Image Storage**: Photos are saved with each filament entry for reference
+
+### 🔧 Enhanced Filament Tracking
+- **Sealed/Opened Status**: Track whether spools are still sealed or have been opened
+- **Last Dried Date**: Optional field for tracking when opened spools were last dried
+- **Print Speed Field**: Track recommended print speeds for each filament
+- **Storage Location System**: Two-tier storage with main locations and sub-location details
+- **Notes Field**: Add any additional notes to filament entries
+- **Purchase Price & Date**: Track when and how much you paid for each spool
+
+### 🛠️ Management Scripts
+- `./scripts/run.sh` - Start local development server
+- `./scripts/shutdown.sh` - Stop local development server
+- `./scripts/reset.sh` - Reset local dev environment (destructive)
+- `./scripts/run-docker.sh` - Start Docker production containers
+- `./scripts/shutdown-docker.sh` - Stop Docker production containers
+- `./scripts/reset-docker.sh` - Reset Docker environment (destructive)
+- `./scripts/backup.sh` / `./scripts/backup-docker.sh` - Backup data
+- `./scripts/restore.sh` / `./scripts/restore-docker.sh` - Restore from backup
 
 ## 📸 Screenshots
 
@@ -23,267 +56,160 @@ Filadex is an open-source filament management system for 3D printing enthusiasts
 
 ## 🌟 Features
 
+### Core Features (from original Filadex)
 - **Filament Inventory Management**: Track all your filaments in one place
 - **Material & Color Visualization**: See your collection distribution at a glance
 - **Detailed Filament Properties**: Record manufacturer, material type, color, weight, and more
 - **Usage Tracking**: Monitor remaining filament percentages
 - **Statistics Dashboard**: Get insights into your filament collection
-- **Filtering & Sorting**: Easily find the filament you need
+- **Filtering & Sorting**: Easily find the filament you need (including min/max remaining filters)
 - **Responsive Design**: Works on desktop and mobile devices
 - **Self-hosted**: Keep your data private and secure
 - **User Management**: Admin interface for managing users
-- **Filament Sharing**: Share your filament collection with others (globally or by material type)
-- **Public Filament View**: Shared filament collections include material/color charts and filtering capabilities
+- **Filament Sharing**: Share your filament collection with others
+- **Multi-language Support**: English and German
+
+### AI-Enhanced Features (this fork)
+- **AI Photo Import**: Extract filament data from photos using OpenAI Vision
+- **Mobile QR Upload**: Upload photos from your phone via QR code scan
+- **Configurable AI Model**: Choose which OpenAI model to use in settings
+- **Secure API Key Storage**: User API keys are encrypted with AES-256-GCM
+- **Smart Material Normalization**: AI understands material variants (PLA+, PETG-HF, TPU 95A, etc.)
+- **Price Estimation**: AI estimates purchase prices based on brand and material
+- **Pan/Zoom Image Preview**: Click any filament image to view full-size with pan and zoom
 
 ## 📋 Prerequisites
 
-- Node.js (v16 or higher)
+- Node.js (v18 or higher)
 - npm or yarn
 - PostgreSQL database
-- Docker & Docker Compose (optional, for containerized deployment)
+- Docker & Docker Compose (recommended for deployment)
+- OpenAI API key (for AI photo import features)
 
-## 🚀 Installation
-
-### Option 1: Local Development Setup
-
-1. **Clone the repository**
-
-```bash
-git clone https://github.com/yourusername/filadex.git
-cd filadex
-```
-
-2. **Install dependencies**
-
-```bash
-npm install
-```
-
-3. **Set up environment variables**
-
-Create a `.env` file in the root directory with the following variables:
-
-```
-DATABASE_URL=postgres://username:password@localhost:5432/filadex
-```
-
-4. **Initialize the database**
-
-```bash
-npm run db:push
-npm run db:init
-```
-
-5. **Start the development server**
-
-```bash
-npm run dev
-```
-
-The application will be available at http://localhost:5000 (or the port in `PORT` in `.env`). On macOS, port 5000 is often used by AirPlay Receiver; set `PORT=5001` in `.env` if you see "address already in use".
-
-**Quick local run with Docker Postgres:** Copy `docker-compose.template.yml` to `docker-compose.yml` and run only the `db` service, or use the repo’s `docker-compose.yml` (Postgres only). Then set `DATABASE_URL=postgres://filadex:filadex@localhost:5432/filadex` in `.env`, run `npm run db:push`, `npm run db:init`, and `npm run dev`.
-
-### Option 2: Docker Deployment
+## 🚀 Quick Start with Docker
 
 1. **Clone the repository**
-
 ```bash
-git clone https://github.com/yourusername/filadex.git
-cd filadex
+git clone https://github.com/CWade3051/Filadex-AI.git
+cd Filadex-AI
 ```
 
-2. **Configure environment variables**
-
-Create a `.env` file in the root directory with the following variables:
-
-```
-# Database Configuration
-POSTGRES_USER=filadex
-POSTGRES_PASSWORD=your_secure_password
-POSTGRES_DB=filadex
-PGHOST=db
-PGPORT=5432
-
-# Application Configuration
-PORT=8080
-DEFAULT_ADMIN_PASSWORD=admin  # Password for the default admin user
-LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARN, ERROR
-INIT_SAMPLE_DATA=false  # Set to 'true' to initialize with sample data
-```
-
-3. **Build and start the containers**
-
+2. **Create docker-compose.yml**
 ```bash
-docker-compose up -d
+cp docker-compose.template.yml docker-compose.yml
 ```
 
-The application will be available at http://localhost:8080 or at the domain configured in your docker-compose.yml file.
+3. **Configure your local IP** (required for mobile QR uploads)
+Edit `docker-compose.yml` and set `HOST_IP` to your machine's IP address:
+```yaml
+- HOST_IP=192.168.1.100  # Your local IP
+```
+
+4. **Start the containers**
+```bash
+docker compose up -d
+```
+
+5. **Access the application**
+- URL: http://localhost:8080
+- Default login: `admin` / `admin` (you'll be prompted to change it)
+
+6. **Add your OpenAI API key**
+- Go to Settings → OpenAI API Key
+- Enter your API key to enable AI photo import
 
 ## 🔧 Configuration
 
-### Database Configuration
+### Environment Variables
 
-Filadex uses PostgreSQL as its database. You can configure the connection in the `.env` file:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Application port | 8080 |
+| `HOST_IP` | Your machine's IP (for mobile QR) | Required for mobile |
+| `DATABASE_URL` | PostgreSQL connection string | - |
+| `OPENAI_API_KEY` | OpenAI API key (fallback) | - |
+| `INIT_SAMPLE_DATA` | Seed initial data | true |
+| `DEFAULT_LANGUAGE` | Default language (en/de) | en |
+| `LOG_LEVEL` | Logging level | INFO |
 
-```
-# Direct connection string
-DATABASE_URL=postgres://username:password@localhost:5432/filadex
+### Storage Locations
 
-# Or individual connection parameters
-POSTGRES_USER=filadex
-POSTGRES_PASSWORD=your_secure_password
-POSTGRES_DB=filadex
-PGHOST=db
-PGPORT=5432
-```
+The reset scripts pre-populate these storage locations (customize in the scripts):
+- A - Bedroom Shelf (45 spools)
+- B - Sealable Storage (12 spools)
+- C/D - Sealable Zip-up (24 spools each)
+- E - Rod Above Printer (8 spools)
+- F - 9-Level Rack (81 spools)
+- AMS HT/Pro 2 units
+- Dryer units (Creality, Polymaker)
 
-### Application Configuration
+### Pre-seeded Materials
 
-You can configure various aspects of the application using environment variables:
+28 material types are pre-populated including:
+- PLA variants: PLA, PLA+, PLA Silk, PLA Matte, PLA-CF, PLA Marble, PLA Support, etc.
+- PETG variants: PETG, PETG-HF, PETG-CF, PETG Translucent
+- TPU variants: TPU, TPU 95A, TPU 80A, TPU for AMS
+- Others: ABS, ASA, PA, PC, Support For PLA/PETG
 
-```
-# Server Configuration
-PORT=8080                     # Port the application will run on
-LOG_LEVEL=INFO                # Logging level (DEBUG, INFO, WARN, ERROR)
+## 📱 Using AI Photo Import
 
-# Authentication
-DEFAULT_ADMIN_PASSWORD=admin  # Default password for the admin user
-JWT_SECRET=your_secret_key    # Secret key for JWT token generation
+1. **Setup**: Add your OpenAI API key in Settings → OpenAI API Key
 
-# Localization
-DEFAULT_LANGUAGE=en           # Default language for new users (en, de)
+2. **Open Import Modal**: Click "Tools" → "Import from Photos"
 
-# Data Initialization
-INIT_SAMPLE_DATA=false        # Set to 'true' to initialize with sample data
-```
+3. **Upload Photos**:
+   - **Desktop**: Drag & drop or click to select files
+   - **Mobile**: Scan QR code, then upload from camera or photo gallery
 
-### Port Configuration
+4. **Processing**: AI analyzes each photo and extracts:
+   - Brand/Manufacturer
+   - Material type
+   - Color name and hex code
+   - Weight
+   - Print temperature, speed, bed temp
+   - Sealed/Opened status
+   - Estimated price
 
-By default, the application runs on port 5000 in development mode. You can change this by setting the `PORT` environment variable.
+5. **Review & Edit**: 
+   - Each field is editable
+   - Dropdowns show existing values with option to add new
+   - Click thumbnail for full-size pan/zoom preview
 
-For Docker deployment, you can configure the port in the `docker-compose.yml` file.
+6. **Bulk Storage Location**: Set storage location for all items at once
 
-## 📱 Usage
+7. **Import**: Click "Import Selected" to add to your inventory
 
-### Authentication and User Management
+## 🔒 Security
 
-1. **First Login**: The system comes with a default admin user (username: `admin`, password: `admin`)
-2. **Password Change**: On first login, you will be required to change the default password
-3. **User Management**: Admin users can access the user management interface by clicking the users icon in the header
-4. **Creating Users**: Admins can create new users, set permissions, and manage existing accounts
-5. **Sharing Filaments**: Users can share their filament collection by clicking the share icon in the header
-   - Share all filaments or select specific material types to share
-   - Copy the shareable link with one click
-   - Shared collections include material/color charts and filtering capabilities
-   - Public view doesn't require authentication
-
-### Filament Management
-
-1. **Adding Filaments**: Click the "Add Filament" button to add a new filament to your inventory
-2. **Editing Filaments**: Click the edit icon on a filament card to update its details
-3. **Filtering**: Use the sidebar filters to find specific filaments by material, manufacturer, or color
-4. **Statistics**: View your collection statistics in the statistics accordion
-5. **Visualization**: See your material and color distribution in the pie chart
-
-### CSV Resources and Import/Export
-
-Filadex comes with pre-populated CSV files in the `resources` directory that can be used to quickly set up your filament database:
-
-1. **Materials List** (`materials_init.csv`): Contains various filament material types (PLA, PETG, ABS, etc.)
-2. **Filament Colors** (`filament_colors_init.csv`): Contains color names and hex codes organized by manufacturer
-3. **Vendors List** (`vendors_init.csv`): Contains a list of filament manufacturers/vendors
-
-To use these resources:
-
-1. Navigate to the Settings dialog by clicking the gear icon in the header
-2. Find the Import/Export section for the data type you want to import (Materials, Colors, or Manufacturers)
-3. Click "Import CSV" and select the corresponding file from the resources directory
-4. The application will import the data, skipping any duplicates
-
-You can also export your current data to CSV files for backup or sharing with the community. The community is encouraged to enhance these resource files by adding more materials, colors, and vendors while avoiding duplicate entries.
+- **Encrypted API Keys**: User OpenAI API keys are encrypted with AES-256-GCM
+- **No Plain Text Storage**: Keys are never stored or transmitted in plain text
+- **Per-User Keys**: Each user can have their own API key
+- **Session-based Auth**: Secure cookie-based authentication
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please see our [Contributing Guidelines](CONTRIBUTING.md) for more details.
 
-## 📝 Project Background
+## 📝 Credits
 
-The inspiration for Filadex came from BambuLab's announcement of a filament management system. While waiting for their official release, I decided to create an open-source alternative that provides simple management with useful statistics. The project evolved to include user management and self-hosting capabilities, making it a versatile solution for the 3D printing community.
-
-What makes Filadex unique is that it was fully coded with the assistance of AI. This project demonstrates how AI can be leveraged to create functional, well-structured applications while maintaining high code quality and user experience standards.
-
-Now, I'm excited to share Filadex with the community and welcome contributions to make it even better!
+- **Original Filadex**: Created by Paul Nothaft
+- **AI Features**: Added by Charles Wade
+- **AI Assistance**: Developed with AI coding assistance
 
 ## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📚 Documentation
-
-### API Documentation
-
-Filadex provides a comprehensive API that allows you to interact with all aspects of the application programmatically. The API documentation is available in the [API.md](docs/API.md) file, which includes:
-
-- Detailed information about all available endpoints
-- Request and response formats
-- Authentication requirements
-- Error handling
-- Import/export functionality
-- And more
-
-### Translation Documentation
-
-Filadex supports multiple languages:
-
-1. **Available Languages**
-   - English (en)
-   - German (de)
-
-2. **Language Selection**
-   - Users can select their preferred language from the language selector in the header
-   - Language preference is stored in user settings and persists across sessions
-   - The application will automatically detect the browser language on first visit
-
-3. **Adding New Languages**
-   - Language files are located in `client/src/i18n/locales/`
-   - To add a new language, create a new file following the same structure as the existing ones
-   - See our [Translation Guide](docs/TRANSLATION_GUIDE.md) for detailed instructions
-   - Check the [Translation Glossary](docs/TRANSLATION_GLOSSARY.md) for terminology consistency
-   - For developers, see the [Technical Translation Guide](docs/TRANSLATION_TECHNICAL.md)
-   - Submit a pull request to contribute translations
-
-4. **Environment Variables**
-   - `DEFAULT_LANGUAGE`: Set the default language for new users (default: "en")
-
-## 🗺️ Roadmap
-
-The following features are planned for future releases:
-
-1. **Additional Languages**
-   - Add support for more languages (French, Spanish, Italian, etc.)
-   - Improve translation coverage across the application
-
-2. **Advanced Filament Management**
-   - Batch operations for filaments (delete, update)
-   - Filament usage history tracking
-   - Print job association with filaments
-
-3. **Enhanced Sharing Features**
-   - QR code generation for shared collections
-   - Password protection for shared collections
-   - Temporary sharing links with expiration
-
-See the [TODO.md](TODO.md) file for a detailed list of pending tasks and improvements.
-
 ## 🙏 Acknowledgements
 
-- All the contributors who have helped shape this project
+- The original Filadex project and community
+- OpenAI for the Vision API
 - The 3D printing community for inspiration and feedback
-- Open-source libraries and tools that made this project possible
+- All contributors who help improve this project
 
 ---
 
 <div align="center">
+  <p>© 2026 Copyright by Paul Nothaft and AI Features by Charles Wade</p>
   <p>Made with ❤️ for the 3D printing community</p>
 </div>
