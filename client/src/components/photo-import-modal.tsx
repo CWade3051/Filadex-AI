@@ -146,16 +146,21 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   const [pendingPhotoCount, setPendingPhotoCount] = useState(0); // Photos uploaded but not yet processed
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const processingPollingRef = useRef<NodeJS.Timeout | null>(null); // For polling processing results
-  const processedImageUrlsRef = useRef<Set<string>>(new Set()); // Track which images we've already processed
+  const detectedUploadUrlsRef = useRef<Set<string>>(new Set()); // Track uploads detected by startPolling (prevents re-detection)
+  const importedUrlsRef = useRef<Set<string>>(new Set()); // Track URLs that have been imported (prevents re-adding after import)
   
-  // Keep processedImageUrlsRef in sync with processedImages to prevent re-processing
+  // Initialize importedUrlsRef from localStorage to prevent re-importing after page refresh
   useEffect(() => {
-    processedImages.forEach(img => {
-      if (img.imageUrl) {
-        processedImageUrlsRef.current.add(img.imageUrl);
+    const savedImported = localStorage.getItem('filadex_imported_urls');
+    if (savedImported) {
+      try {
+        const urls = JSON.parse(savedImported);
+        urls.forEach((url: string) => importedUrlsRef.current.add(url));
+      } catch (e) {
+        console.error('Failed to load imported URLs:', e);
       }
-    });
-  }, [processedImages]); // Update whenever processedImages changes
+    }
+  }, []);
   
   // Persist processed images to localStorage
   useEffect(() => {
@@ -457,15 +462,15 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         if (response.ok) {
           const data = await response.json();
           
-          // Find new images that we haven't processed yet (URL-based tracking only)
+          // Find new images that we haven't detected yet (URL-based tracking only)
           const newImages = data.images.filter((img: any) => 
-            !processedImageUrlsRef.current.has(img.imageUrl)
+            !detectedUploadUrlsRef.current.has(img.imageUrl)
           );
           
           if (newImages.length > 0) {
-            // Mark these images as being processed BEFORE showing notification
+            // Mark these images as detected BEFORE showing notification (prevents re-detection on next poll)
             newImages.forEach((img: any) => {
-              processedImageUrlsRef.current.add(img.imageUrl);
+              detectedUploadUrlsRef.current.add(img.imageUrl);
             });
             
             // Update pending count and show notification
@@ -507,17 +512,17 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             total: data.imageCount || 0,
           });
           
-          // Add newly processed images to review (only if not already processed/imported)
+          // Add newly processed images to review (only if not already in list or already imported)
           const processedResults = data.images.filter((img: any) => img.extractedData || img.error);
           if (processedResults.length > 0) {
             setProcessedImages(prev => {
               const existingUrls = new Set(prev.map(p => p.imageUrl));
               
-              // Filter out images already in the list OR already in our processed tracking ref
+              // Filter out images already in the list OR already imported
               const trulyNew = processedResults
                 .filter((result: any) => 
                   !existingUrls.has(result.imageUrl) && 
-                  !processedImageUrlsRef.current.has(result.imageUrl)
+                  !importedUrlsRef.current.has(result.imageUrl)
                 )
                 .map((result: any) => ({
                   imageUrl: result.imageUrl,
@@ -531,14 +536,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                   lastDryingDate: "",
                 }));
               
-              if (trulyNew.length > 0) {
-                // Add new URLs to tracking ref
-                trulyNew.forEach((p: ProcessedImage) => {
-                  processedImageUrlsRef.current.add(p.imageUrl);
-                });
-                return [...prev, ...trulyNew];
-              }
-              return prev;
+              return trulyNew.length > 0 ? [...prev, ...trulyNew] : prev;
             });
           }
           
@@ -640,14 +638,22 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         });
       }
       
-      // Mark imported images as permanently processed (add to tracking ref)
-      // This prevents them from being re-added if polling continues
+      // Mark imported images as permanently imported (prevents re-adding after import)
       setProcessedImages(prev => {
-        prev.filter(img => img.selected).forEach(img => {
+        const importedImages = prev.filter(img => img.selected);
+        importedImages.forEach(img => {
           if (img.imageUrl) {
-            processedImageUrlsRef.current.add(img.imageUrl);
+            importedUrlsRef.current.add(img.imageUrl);
           }
         });
+        
+        // Persist imported URLs to localStorage
+        try {
+          localStorage.setItem('filadex_imported_urls', JSON.stringify([...importedUrlsRef.current]));
+        } catch (e) {
+          console.error('Failed to save imported URLs:', e);
+        }
+        
         // Then remove them from the list
         return prev.filter(img => !img.selected);
       });
