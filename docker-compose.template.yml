@@ -35,7 +35,7 @@ services:
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en}
-      - INIT_SAMPLE_DATA=${INIT_SAMPLE_DATA:-false}
+      - INIT_SAMPLE_DATA=${INIT_SAMPLE_DATA:-true}
       # AI Features - OpenAI API key (optional, can also be set per-user in settings)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       # HOST_IP is REQUIRED for mobile QR code uploads to work
