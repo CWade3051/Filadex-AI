@@ -24,6 +24,23 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import archiver from "archiver";
+import unzipper from "unzipper";
+import { Readable } from "stream";
+import multer from "multer";
+
+// Configure multer for zip file uploads
+const zipUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB max
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === "application/zip" || file.originalname.endsWith(".zip")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only zip files are allowed"));
+    }
+  },
+});
 
 // Cloud provider OAuth configurations
 // Note: These would be set in environment variables in production
@@ -689,18 +706,251 @@ export function registerCloudBackupRoutes(app: Express) {
     }
   );
 
-  // Download local backup (always available)
+  // Download local backup as ZIP (includes images)
   app.get("/api/cloud-backup/download", authenticate, async (req: Request, res: Response) => {
     try {
       const backupData = await generateBackupData(req.userId!);
-      const filename = `filadex-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      const filename = `filadex-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
 
-      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Type", "application/zip");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.json(backupData);
+
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      archive.pipe(res);
+
+      // Add backup.json to the archive
+      archive.append(JSON.stringify(backupData, null, 2), { name: "backup.json" });
+
+      // Add user's filament images to the archive
+      const imagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
+      if (fs.existsSync(imagesDir)) {
+        // Get list of image URLs from user's filaments
+        const userImageUrls = backupData.data.filaments
+          .map((f: any) => f.imageUrl)
+          .filter((url: string | null) => url && url.startsWith("/uploads/filaments/"));
+
+        for (const imageUrl of userImageUrls) {
+          const imageName = path.basename(imageUrl);
+          const imagePath = path.join(imagesDir, imageName);
+          if (fs.existsSync(imagePath)) {
+            archive.file(imagePath, { name: `images/${imageName}` });
+          }
+        }
+      }
+
+      await archive.finalize();
     } catch (error) {
       appLogger.error("Error generating backup:", error);
       res.status(500).json({ message: "Failed to generate backup" });
+    }
+  });
+
+  // Restore from uploaded ZIP backup file (user-level)
+  app.post("/api/cloud-backup/restore-zip", authenticate, zipUpload.single("backup"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No backup file uploaded" });
+      }
+
+      const userId = req.userId!;
+      const imagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
+      
+      // Ensure images directory exists
+      if (!fs.existsSync(imagesDir)) {
+        fs.mkdirSync(imagesDir, { recursive: true });
+      }
+
+      let backupData: any = null;
+      const restoredImages: string[] = [];
+
+      // Parse the zip file
+      const zipBuffer = req.file.buffer;
+      const directory = await unzipper.Open.buffer(zipBuffer);
+
+      for (const file of directory.files) {
+        if (file.path === "backup.json") {
+          const content = await file.buffer();
+          backupData = JSON.parse(content.toString("utf-8"));
+        } else if (file.path.startsWith("images/") && !file.path.endsWith("/")) {
+          const imageName = path.basename(file.path);
+          const imagePath = path.join(imagesDir, imageName);
+          const content = await file.buffer();
+          fs.writeFileSync(imagePath, content);
+          restoredImages.push(imageName);
+        }
+      }
+
+      if (!backupData || !backupData.version || !backupData.data) {
+        return res.status(400).json({ message: "Invalid backup file format - backup.json not found or invalid" });
+      }
+
+      const { data, userSettings } = backupData;
+
+      // Track restored counts
+      const restored = {
+        filaments: 0,
+        printJobs: 0,
+        slicerProfiles: 0,
+        filamentHistory: 0,
+        userSharing: 0,
+        materialCompatibility: 0,
+        userSettings: false,
+        images: restoredImages.length,
+      };
+
+      // Map old filament IDs to new IDs for history references
+      const filamentIdMap: Record<number, number> = {};
+
+      // Restore user settings (non-sensitive)
+      if (userSettings) {
+        try {
+          await db
+            .update(users)
+            .set({
+              language: userSettings.language,
+              currency: userSettings.currency,
+              temperatureUnit: userSettings.temperatureUnit,
+            })
+            .where(eq(users.id, userId));
+          restored.userSettings = true;
+        } catch (err) {
+          appLogger.warn("Could not restore user settings:", err);
+        }
+      }
+
+      // Restore material compatibility
+      if (data.materialCompatibility && Array.isArray(data.materialCompatibility)) {
+        for (const compat of data.materialCompatibility) {
+          const { id, ...compatData } = compat;
+          try {
+            await db.insert(materialCompatibility).values({
+              ...compatData,
+              createdAt: compatData.createdAt ? new Date(compatData.createdAt) : new Date(),
+            });
+            restored.materialCompatibility++;
+          } catch (insertError) {
+            // Skip duplicates
+          }
+        }
+      }
+
+      // Restore filaments (track ID mapping for history)
+      if (data.filaments && Array.isArray(data.filaments)) {
+        for (const filament of data.filaments) {
+          const { id: oldId, userId: oldUserId, ...filamentData } = filament;
+          
+          try {
+            const [newFilament] = await db.insert(filaments).values({
+              ...filamentData,
+              userId,
+              createdAt: filamentData.createdAt ? new Date(filamentData.createdAt) : new Date(),
+              updatedAt: new Date(),
+            }).returning({ id: filaments.id });
+            
+            if (oldId && newFilament) {
+              filamentIdMap[oldId] = newFilament.id;
+            }
+            restored.filaments++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore filament:", insertError);
+          }
+        }
+      }
+
+      // Restore filament history (with ID mapping)
+      if (data.filamentHistory && Array.isArray(data.filamentHistory)) {
+        for (const history of data.filamentHistory) {
+          const { id, filamentId: oldFilamentId, printJobId, ...historyData } = history;
+          const newFilamentId = filamentIdMap[oldFilamentId];
+          
+          if (!newFilamentId) continue;
+          
+          try {
+            await db.insert(filamentHistory).values({
+              ...historyData,
+              filamentId: newFilamentId,
+              printJobId: null,
+              createdAt: historyData.createdAt ? new Date(historyData.createdAt) : new Date(),
+            });
+            restored.filamentHistory++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore filament history:", insertError);
+          }
+        }
+      }
+
+      // Restore print jobs
+      if (data.printJobs && Array.isArray(data.printJobs)) {
+        for (const job of data.printJobs) {
+          const { id, userId: oldUserId, ...jobData } = job;
+          
+          try {
+            await db.insert(printJobs).values({
+              ...jobData,
+              userId,
+              createdAt: jobData.createdAt ? new Date(jobData.createdAt) : new Date(),
+            });
+            restored.printJobs++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore print job:", insertError);
+          }
+        }
+      }
+
+      // Restore slicer profiles
+      if (data.slicerProfiles && Array.isArray(data.slicerProfiles)) {
+        for (const profile of data.slicerProfiles) {
+          const { id, userId: oldUserId, ...profileData } = profile;
+          
+          try {
+            await db.insert(slicerProfiles).values({
+              ...profileData,
+              userId,
+              createdAt: profileData.createdAt ? new Date(profileData.createdAt) : new Date(),
+              updatedAt: new Date(),
+            });
+            restored.slicerProfiles++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore slicer profile:", insertError);
+          }
+        }
+      }
+
+      // Restore user sharing settings
+      if (data.userSharing && Array.isArray(data.userSharing)) {
+        for (const sharing of data.userSharing) {
+          const { id, userId: oldUserId, ...sharingData } = sharing;
+          
+          try {
+            await db.insert(userSharing).values({
+              ...sharingData,
+              userId,
+              createdAt: sharingData.createdAt ? new Date(sharingData.createdAt) : new Date(),
+            });
+            restored.userSharing++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore sharing setting:", insertError);
+          }
+        }
+      }
+
+      // Log the restore
+      await db.insert(backupHistory).values({
+        userId,
+        provider: "local_zip",
+        status: "completed",
+        fileSize: zipBuffer.length,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      });
+
+      res.json({
+        message: "Restore completed",
+        restored,
+      });
+    } catch (error) {
+      appLogger.error("Error restoring backup:", error);
+      res.status(500).json({ message: "Failed to restore backup" });
     }
   });
 
@@ -1344,7 +1594,7 @@ export function registerCloudBackupRoutes(app: Express) {
   // Admin Full Backup/Restore
   // ============================================
 
-  // Download admin full backup (all users - admin only)
+  // Download admin full backup as ZIP (all users - admin only)
   app.get("/api/cloud-backup/admin/download", authenticate, async (req: Request, res: Response) => {
     try {
       // Check if user is admin
@@ -1358,11 +1608,34 @@ export function registerCloudBackupRoutes(app: Express) {
       }
 
       const backupData = await generateAdminBackupData();
-      const filename = `filadex-admin-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      const filename = `filadex-admin-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
 
-      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Type", "application/zip");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.json(backupData);
+
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      archive.pipe(res);
+
+      // Add backup.json to the archive
+      archive.append(JSON.stringify(backupData, null, 2), { name: "backup.json" });
+
+      // Add ALL filament images to the archive
+      const imagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
+      if (fs.existsSync(imagesDir)) {
+        const allImageUrls = backupData.data.filaments
+          .map((f: any) => f.imageUrl)
+          .filter((url: string | null) => url && url.startsWith("/uploads/filaments/"));
+
+        for (const imageUrl of allImageUrls) {
+          const imageName = path.basename(imageUrl);
+          const imagePath = path.join(imagesDir, imageName);
+          if (fs.existsSync(imagePath)) {
+            archive.file(imagePath, { name: `images/${imageName}` });
+          }
+        }
+      }
+
+      await archive.finalize();
     } catch (error) {
       appLogger.error("Error generating admin backup:", error);
       res.status(500).json({ message: "Failed to generate admin backup" });
@@ -1588,6 +1861,269 @@ export function registerCloudBackupRoutes(app: Express) {
         provider: "admin_restore",
         status: "completed",
         fileSize: JSON.stringify(backupData).length,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      });
+
+      res.json({
+        message: "Admin restore completed",
+        restored,
+        note: restored.users > 0 ? `${restored.users} new users created with temporary password "changeme"` : undefined,
+      });
+    } catch (error) {
+      appLogger.error("Error restoring admin backup:", error);
+      res.status(500).json({ message: "Failed to restore admin backup" });
+    }
+  });
+
+  // Restore admin full backup from ZIP file (admin only)
+  app.post("/api/cloud-backup/admin/restore-zip", authenticate, zipUpload.single("backup"), async (req: Request, res: Response) => {
+    try {
+      // Check if user is admin
+      const [currentUser] = await db
+        .select({ isAdmin: users.isAdmin })
+        .from(users)
+        .where(eq(users.id, req.userId!));
+
+      if (!currentUser?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No backup file uploaded" });
+      }
+
+      const imagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
+      
+      // Ensure images directory exists
+      if (!fs.existsSync(imagesDir)) {
+        fs.mkdirSync(imagesDir, { recursive: true });
+      }
+
+      let backupData: any = null;
+      const restoredImages: string[] = [];
+
+      // Parse the zip file
+      const zipBuffer = req.file.buffer;
+      const directory = await unzipper.Open.buffer(zipBuffer);
+
+      for (const file of directory.files) {
+        if (file.path === "backup.json") {
+          const content = await file.buffer();
+          backupData = JSON.parse(content.toString("utf-8"));
+        } else if (file.path.startsWith("images/") && !file.path.endsWith("/")) {
+          const imageName = path.basename(file.path);
+          const imagePath = path.join(imagesDir, imageName);
+          const content = await file.buffer();
+          fs.writeFileSync(imagePath, content);
+          restoredImages.push(imageName);
+        }
+      }
+
+      if (!backupData || !backupData.version || !backupData.data) {
+        return res.status(400).json({ message: "Invalid backup file format - backup.json not found or invalid" });
+      }
+
+      if (backupData.backupType !== "admin_full") {
+        return res.status(400).json({ message: "This is not an admin backup file. Use regular restore for user backups." });
+      }
+
+      const { data } = backupData;
+
+      // Track restore stats
+      const restored = {
+        users: 0,
+        filaments: 0,
+        printJobs: 0,
+        slicerProfiles: 0,
+        filamentHistory: 0,
+        userSharing: 0,
+        materialCompatibility: 0,
+        images: restoredImages.length,
+      };
+
+      // Map old IDs to new IDs
+      const userIdMap: Record<number, number> = {};
+      const filamentIdMap: Record<number, number> = {};
+
+      // Restore users (create if not exists)
+      if (data.users && Array.isArray(data.users)) {
+        for (const user of data.users) {
+          const { id: oldId, ...userData } = user;
+          
+          const [existingUser] = await db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.username, userData.username));
+
+          if (existingUser) {
+            userIdMap[oldId] = existingUser.id;
+            await db
+              .update(users)
+              .set({
+                language: userData.language,
+                currency: userData.currency,
+                temperatureUnit: userData.temperatureUnit,
+              })
+              .where(eq(users.id, existingUser.id));
+          } else {
+            const tempPassword = await bcrypt.hash("changeme", 10);
+            const [newUser] = await db
+              .insert(users)
+              .values({
+                username: userData.username,
+                password: tempPassword,
+                isAdmin: userData.isAdmin || false,
+                forceChangePassword: true,
+                language: userData.language || "en",
+                currency: userData.currency || "USD",
+                temperatureUnit: userData.temperatureUnit || "C",
+              })
+              .returning({ id: users.id });
+
+            userIdMap[oldId] = newUser.id;
+            restored.users++;
+          }
+        }
+      }
+
+      // Restore material compatibility
+      if (data.materialCompatibility && Array.isArray(data.materialCompatibility)) {
+        for (const compat of data.materialCompatibility) {
+          const { id, ...compatData } = compat;
+          try {
+            await db.insert(materialCompatibility).values({
+              ...compatData,
+              createdAt: compatData.createdAt ? new Date(compatData.createdAt) : new Date(),
+            });
+            restored.materialCompatibility++;
+          } catch (insertError) {
+            // Skip duplicates
+          }
+        }
+      }
+
+      // Restore filaments (with user ID mapping, track filament ID mapping)
+      if (data.filaments && Array.isArray(data.filaments)) {
+        for (const filament of data.filaments) {
+          const { id: oldId, userId: oldUserId, ...filamentData } = filament;
+          const newUserId = userIdMap[oldUserId];
+          
+          if (!newUserId) {
+            appLogger.warn(`Skipping filament - user ID ${oldUserId} not found in backup`);
+            continue;
+          }
+          
+          try {
+            const [newFilament] = await db.insert(filaments).values({
+              ...filamentData,
+              userId: newUserId,
+              createdAt: filamentData.createdAt ? new Date(filamentData.createdAt) : new Date(),
+              updatedAt: new Date(),
+            }).returning({ id: filaments.id });
+            
+            if (oldId && newFilament) {
+              filamentIdMap[oldId] = newFilament.id;
+            }
+            restored.filaments++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore filament:", insertError);
+          }
+        }
+      }
+
+      // Restore filament history (with filament ID mapping)
+      if (data.filamentHistory && Array.isArray(data.filamentHistory)) {
+        for (const history of data.filamentHistory) {
+          const { id, filamentId: oldFilamentId, printJobId, ...historyData } = history;
+          const newFilamentId = filamentIdMap[oldFilamentId];
+          
+          if (!newFilamentId) continue;
+          
+          try {
+            await db.insert(filamentHistory).values({
+              ...historyData,
+              filamentId: newFilamentId,
+              printJobId: null,
+              createdAt: historyData.createdAt ? new Date(historyData.createdAt) : new Date(),
+            });
+            restored.filamentHistory++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore filament history:", insertError);
+          }
+        }
+      }
+
+      // Restore print jobs (with user ID mapping)
+      if (data.printJobs && Array.isArray(data.printJobs)) {
+        for (const job of data.printJobs) {
+          const { id, userId: oldUserId, ...jobData } = job;
+          const newUserId = userIdMap[oldUserId];
+          
+          if (!newUserId) continue;
+          
+          try {
+            await db.insert(printJobs).values({
+              ...jobData,
+              userId: newUserId,
+              createdAt: jobData.createdAt ? new Date(jobData.createdAt) : new Date(),
+            });
+            restored.printJobs++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore print job:", insertError);
+          }
+        }
+      }
+
+      // Restore slicer profiles (with user ID mapping)
+      if (data.slicerProfiles && Array.isArray(data.slicerProfiles)) {
+        for (const profile of data.slicerProfiles) {
+          const { id, userId: oldUserId, ...profileData } = profile;
+          const newUserId = userIdMap[oldUserId];
+          
+          if (!newUserId) continue;
+          
+          try {
+            await db.insert(slicerProfiles).values({
+              ...profileData,
+              userId: newUserId,
+              createdAt: profileData.createdAt ? new Date(profileData.createdAt) : new Date(),
+              updatedAt: new Date(),
+            });
+            restored.slicerProfiles++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore slicer profile:", insertError);
+          }
+        }
+      }
+
+      // Restore user sharing (with user ID mapping)
+      if (data.userSharing && Array.isArray(data.userSharing)) {
+        for (const sharing of data.userSharing) {
+          const { id, userId: oldUserId, ...sharingData } = sharing;
+          const newUserId = userIdMap[oldUserId];
+          
+          if (!newUserId) continue;
+          
+          try {
+            await db.insert(userSharing).values({
+              ...sharingData,
+              userId: newUserId,
+              createdAt: sharingData.createdAt ? new Date(sharingData.createdAt) : new Date(),
+            });
+            restored.userSharing++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore user sharing:", insertError);
+          }
+        }
+      }
+
+      // Log the restore
+      await db.insert(backupHistory).values({
+        userId: req.userId!,
+        provider: "admin_restore_zip",
+        status: "completed",
+        fileSize: zipBuffer.length,
         startedAt: new Date(),
         completedAt: new Date(),
       });

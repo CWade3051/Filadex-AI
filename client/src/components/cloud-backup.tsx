@@ -337,14 +337,13 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
     },
   });
 
-  // Restore mutation
+  // Restore mutation (handles ZIP file uploads)
   const restoreMutation = useMutation({
-    mutationFn: async (backupData: any) => {
-      const response = await fetch("/api/cloud-backup/restore", {
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/cloud-backup/restore-zip", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(backupData),
+        body: formData,
       });
       if (!response.ok) {
         const error = await response.json();
@@ -363,6 +362,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
       if (data.restored.filamentHistory) parts.push(`${data.restored.filamentHistory} history entries`);
       if (data.restored.userSharing) parts.push(`${data.restored.userSharing} sharing settings`);
       if (data.restored.materialCompatibility) parts.push(`${data.restored.materialCompatibility} compatibility entries`);
+      if (data.restored.images) parts.push(`${data.restored.images} images`);
       if (data.restored.userSettings) parts.push("user settings");
       toast({
         title: "Restore Complete",
@@ -374,14 +374,13 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
     },
   });
 
-  // Admin restore mutation
+  // Admin restore mutation (handles ZIP file uploads)
   const adminRestoreMutation = useMutation({
-    mutationFn: async (backupData: any) => {
-      const response = await fetch("/api/cloud-backup/admin/restore", {
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/cloud-backup/admin/restore-zip", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(backupData),
+        body: formData,
       });
       if (!response.ok) {
         const error = await response.json();
@@ -401,6 +400,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
       if (data.restored.filamentHistory) parts.push(`${data.restored.filamentHistory} history entries`);
       if (data.restored.userSharing) parts.push(`${data.restored.userSharing} sharing settings`);
       if (data.restored.materialCompatibility) parts.push(`${data.restored.materialCompatibility} compatibility entries`);
+      if (data.restored.images) parts.push(`${data.restored.images} images`);
       toast({
         title: "Admin Restore Complete",
         description: parts.length > 0 ? `Restored ${parts.join(", ")}. ${data.note || ""}` : "No new data to restore.",
@@ -421,7 +421,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `filadex-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      a.download = `filadex-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -433,27 +433,26 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
     }
   };
 
-  // Handle file upload for restore
+  // Handle file upload for restore (ZIP file)
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    try {
-      const text = await file.text();
-      const backupData = JSON.parse(text);
-      
-      if (!backupData.version || !backupData.data) {
-        throw new Error("Invalid backup file format");
-      }
-
-      restoreMutation.mutate(backupData);
-    } catch (error: any) {
+    if (!file.name.endsWith(".zip")) {
       toast({
         title: "Invalid File",
-        description: error.message || "Could not parse backup file",
+        description: "Please upload a .zip backup file",
         variant: "destructive",
       });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
     }
+
+    const formData = new FormData();
+    formData.append("backup", file);
+    restoreMutation.mutate(formData);
 
     // Reset file input
     if (fileInputRef.current) {
@@ -474,7 +473,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `filadex-admin-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      a.download = `filadex-admin-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -486,31 +485,26 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
     }
   };
 
-  // Handle admin file upload for restore
+  // Handle admin file upload for restore (ZIP file)
   const handleAdminFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    try {
-      const text = await file.text();
-      const backupData = JSON.parse(text);
-      
-      if (!backupData.version || !backupData.data) {
-        throw new Error("Invalid backup file format");
-      }
-
-      if (backupData.backupType !== "admin_full") {
-        throw new Error("This is not an admin backup file. Use regular restore for user backups.");
-      }
-
-      adminRestoreMutation.mutate(backupData);
-    } catch (error: any) {
+    if (!file.name.endsWith(".zip")) {
       toast({
         title: "Invalid File",
-        description: error.message || "Could not parse backup file",
+        description: "Please upload a .zip backup file",
         variant: "destructive",
       });
+      if (adminFileInputRef.current) {
+        adminFileInputRef.current.value = "";
+      }
+      return;
     }
+
+    const formData = new FormData();
+    formData.append("backup", file);
+    adminRestoreMutation.mutate(formData);
 
     // Reset file input
     if (adminFileInputRef.current) {
@@ -563,7 +557,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".json"
+                  accept=".zip"
                   onChange={handleFileUpload}
                   className="hidden"
                   aria-label="Upload backup file"
@@ -603,7 +597,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
                   <input
                     ref={adminFileInputRef}
                     type="file"
-                    accept=".json"
+                    accept=".zip"
                     onChange={handleAdminFileUpload}
                     className="hidden"
                     aria-label="Upload admin backup file"
