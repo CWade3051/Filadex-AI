@@ -1083,14 +1083,14 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                       <Combobox
                         options={storageLocationOptions}
                         value=""
-                        onValueChange={(value) => {
+                        onChange={(value) => {
                           // Apply to all items
                           setProcessedImages(prev => prev.map(img => ({
                             ...img,
                             storageLocation: value
                           })));
                         }}
-                        placeholder={t("filament.selectStorageLocation") || "Select storage location..."}
+                        placeholder="Select storage location..."
                         allowCustom={true}
                       />
                     </div>

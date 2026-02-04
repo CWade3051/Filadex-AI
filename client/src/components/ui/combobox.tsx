@@ -100,7 +100,7 @@ export function Combobox({
             value={inputValue}
             onValueChange={setInputValue}
           />
-          <CommandList>
+          <CommandList className="max-h-[300px] overflow-y-auto">
             <CommandEmpty>
               {allowCustom && inputValue.trim() ? (
                 <button
