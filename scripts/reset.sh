@@ -80,6 +80,41 @@ PGPASSWORD=filadex_dev psql -h localhost -p 5433 -U filadex_dev -d filadex_dev -
   INSERT INTO diameters (value) VALUES (1.75) ON CONFLICT DO NOTHING;
   INSERT INTO diameters (value) VALUES (2.85) ON CONFLICT DO NOTHING;
   
+  -- Common Manufacturers
+  INSERT INTO manufacturers (name) VALUES ('Bambu Lab') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Sunlu') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Polymaker') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Hatchbox') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('eSUN') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Overture') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Prusament') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Inland') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Creality') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Snapmaker') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Elegoo') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Eryone') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('TTYT3D') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Duramic') ON CONFLICT DO NOTHING;
+  INSERT INTO manufacturers (name) VALUES ('Amazon Basics') ON CONFLICT DO NOTHING;
+  
+  -- Common Colors
+  INSERT INTO colors (name, code) VALUES ('Black', '#000000') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('White', '#FFFFFF') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Red', '#FF0000') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Blue', '#0000FF') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Green', '#00FF00') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Yellow', '#FFFF00') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Orange', '#FFA500') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Purple', '#800080') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Pink', '#FFC0CB') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Gray', '#808080') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Silver', '#C0C0C0') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Gold', '#FFD700') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Brown', '#8B4513') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Magenta', '#FF00FF') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Cyan', '#00FFFF') ON CONFLICT DO NOTHING;
+  INSERT INTO colors (name, code) VALUES ('Transparent', '#FFFFFF') ON CONFLICT DO NOTHING;
+  
   -- Storage Locations
   INSERT INTO storage_locations (name, description, capacity) VALUES ('A - Bedroom Shelf', '2 shelves: top has 3 rows x 5 high, bottom has 2 rows x 10', 45) ON CONFLICT DO NOTHING;
   INSERT INTO storage_locations (name, description, capacity) VALUES ('B - Sealable Storage', '1 row deep, 2 rows high, 6 spools each', 12) ON CONFLICT DO NOTHING;
