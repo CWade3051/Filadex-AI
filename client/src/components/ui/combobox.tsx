@@ -100,48 +100,53 @@ export function Combobox({
             value={inputValue}
             onValueChange={setInputValue}
           />
-          <CommandList>
-            <CommandEmpty>
-              {allowCustom && inputValue.trim() ? (
-                <button
-                  onClick={handleAddCustom}
-                  className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded cursor-pointer"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add "{inputValue.trim()}"
-                </button>
-              ) : (
-                emptyText
-              )}
-            </CommandEmpty>
-            <CommandGroup>
-              {filteredOptions.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={option.value}
-                  onSelect={() => handleSelect(option.value)}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === option.value ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {option.label}
-                </CommandItem>
-              ))}
-              {allowCustom && inputValue.trim() && !exactMatch && filteredOptions.length > 0 && (
-                <CommandItem
-                  value={`__custom__${inputValue}`}
-                  onSelect={handleAddCustom}
-                  className="border-t"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add "{inputValue.trim()}"
-                </CommandItem>
-              )}
-            </CommandGroup>
-          </CommandList>
+          <div 
+            className="max-h-[300px] overflow-y-auto"
+            onWheel={(e) => e.stopPropagation()}
+          >
+            <CommandList>
+              <CommandEmpty>
+                {allowCustom && inputValue.trim() ? (
+                  <button
+                    onClick={handleAddCustom}
+                    className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add "{inputValue.trim()}"
+                  </button>
+                ) : (
+                  emptyText
+                )}
+              </CommandEmpty>
+              <CommandGroup>
+                {filteredOptions.map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    value={option.value}
+                    onSelect={() => handleSelect(option.value)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === option.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {option.label}
+                  </CommandItem>
+                ))}
+                {allowCustom && inputValue.trim() && !exactMatch && filteredOptions.length > 0 && (
+                  <CommandItem
+                    value={`__custom__${inputValue}`}
+                    onSelect={handleAddCustom}
+                    className="border-t"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add "{inputValue.trim()}"
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </CommandList>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>
