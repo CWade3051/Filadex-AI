@@ -103,12 +103,29 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 });
+  // Load persisted mobile session from localStorage
   const [mobileSession, setMobileSession] = useState<{
     token: string;
     qrCode: string;
     uploadUrl: string;
     expiresAt: string;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('filadex_mobile_session');
+      if (saved) {
+        const session = JSON.parse(saved);
+        // Check if session is expired
+        if (new Date(session.expiresAt) > new Date()) {
+          return session;
+        } else {
+          localStorage.removeItem('filadex_mobile_session');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load saved session:', e);
+    }
+    return null;
+  });
   const [isPolling, setIsPolling] = useState(false);
   const [pendingPhotoCount, setPendingPhotoCount] = useState(0); // Photos uploaded but not yet processed
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -128,6 +145,19 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       console.error('Failed to save imports:', e);
     }
   }, [processedImages]);
+  
+  // Persist mobile session to localStorage
+  useEffect(() => {
+    try {
+      if (mobileSession) {
+        localStorage.setItem('filadex_mobile_session', JSON.stringify(mobileSession));
+      } else {
+        localStorage.removeItem('filadex_mobile_session');
+      }
+    } catch (e) {
+      console.error('Failed to save session:', e);
+    }
+  }, [mobileSession]);
   
   // Function to delete an item from review
   const handleDeleteFromReview = (index: number) => {
@@ -212,38 +242,55 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     { value: "3", label: "3kg" },
   ];
 
-  // Clean up on close - preserve processedImages (persisted in localStorage)
+  // Clean up on close - preserve session and keep polling for new uploads
   useEffect(() => {
     if (!isOpen) {
       setSelectedFiles([]);
-      // Keep processedImages - they're persisted in localStorage
-      // Only reset session-related state
-      setMobileSession(null);
-      setIsPolling(false);
-      setPendingPhotoCount(0);
-      lastImageCountRef.current = 0;
-      processedImageUrlsRef.current = new Set();
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-      if (processingPollingRef.current) {
-        clearInterval(processingPollingRef.current);
-        processingPollingRef.current = null;
-      }
+      // Keep processedImages and mobileSession - they're persisted in localStorage
+      // Keep polling running so we detect new uploads even when modal is closed
+      // Only reset UI-specific state
       setIsProcessing(false);
       // Go to review tab if there are pending items, otherwise upload
       setActiveTab(processedImages.length > 0 ? "review" : "upload");
     }
   }, [isOpen, processedImages.length]);
   
-  // Resume polling when modal reopens with active session
+  // Start/resume polling when there's an active session (even when modal closed)
   useEffect(() => {
-    if (isOpen && mobileSession && !isPolling && !pollingRef.current) {
-      // Resume polling for this session
-      startPolling(mobileSession.token);
+    if (mobileSession && !pollingRef.current) {
+      // Check if session is still valid
+      if (new Date(mobileSession.expiresAt) > new Date()) {
+        startPolling(mobileSession.token);
+      } else {
+        // Session expired, clean up
+        setMobileSession(null);
+      }
     }
-  }, [isOpen, mobileSession, isPolling]);
+    
+    // Cleanup when session ends
+    return () => {
+      // Don't cleanup here - we want polling to continue
+    };
+  }, [mobileSession]);
+  
+  // Check session expiration periodically
+  useEffect(() => {
+    if (mobileSession) {
+      const checkExpiry = setInterval(() => {
+        if (new Date(mobileSession.expiresAt) <= new Date()) {
+          // Session expired
+          setMobileSession(null);
+          setIsPolling(false);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+        }
+      }, 30000); // Check every 30 seconds
+      
+      return () => clearInterval(checkExpiry);
+    }
+  }, [mobileSession]);
 
   // File drop handler
   const onDrop = useCallback((acceptedFiles: File[]) => {
