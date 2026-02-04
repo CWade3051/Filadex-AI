@@ -732,9 +732,9 @@ export function registerCloudBackupRoutes(app: Express) {
 
       // Add user's filament images to the archive
       const imagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
-      appLogger.info(`Backup: Looking for images in: ${imagesDir}`);
-      appLogger.info(`Backup: Directory exists: ${fs.existsSync(imagesDir)}`);
-      appLogger.info(`Backup: Filaments count: ${backupData.data.filaments.length}`);
+      console.log(`[BACKUP] Looking for images in: ${imagesDir}`);
+      console.log(`[BACKUP] Directory exists: ${fs.existsSync(imagesDir)}`);
+      console.log(`[BACKUP] Filaments count: ${backupData.data.filaments.length}`);
       
       if (fs.existsSync(imagesDir)) {
         // Get list of image URLs from user's filaments
@@ -742,9 +742,9 @@ export function registerCloudBackupRoutes(app: Express) {
           .map((f: any) => f.imageUrl)
           .filter((url: string | null) => url && url.startsWith("/uploads/filaments/"));
 
-        appLogger.info(`Backup: Found ${userImageUrls.length} image URLs in filaments`);
+        console.log(`[BACKUP] Found ${userImageUrls.length} image URLs in filaments`);
         if (backupData.data.filaments.length > 0) {
-          appLogger.info(`Backup: First filament imageUrl: ${backupData.data.filaments[0]?.imageUrl}`);
+          console.log(`[BACKUP] First filament imageUrl: ${backupData.data.filaments[0]?.imageUrl}`);
         }
 
         let imagesAdded = 0;
@@ -752,17 +752,17 @@ export function registerCloudBackupRoutes(app: Express) {
           const imageName = path.basename(imageUrl);
           const imagePath = path.join(imagesDir, imageName);
           const exists = fs.existsSync(imagePath);
-          appLogger.info(`Backup: Image ${imageName} exists: ${exists}`);
+          console.log(`[BACKUP] Image ${imageName} exists: ${exists}`);
           if (exists) {
             archive.file(imagePath, { name: `images/${imageName}` });
             imagesAdded++;
           }
         }
-        appLogger.info(`Backup: Added ${imagesAdded} images to archive`);
+        console.log(`[BACKUP] Added ${imagesAdded} images to archive`);
       }
 
       await archive.finalize();
-      appLogger.info("Backup: Archive finalized successfully");
+      console.log("[BACKUP] Archive finalized successfully");
     } catch (error) {
       appLogger.error("Error generating backup:", error);
       res.status(500).json({ message: "Failed to generate backup" });
