@@ -64,6 +64,12 @@ Determine the filament color from:
 3. **Color swatches** on packaging
 For the hex code, estimate based on the ACTUAL visible filament color, not the spool color.
 
+**IMPORTANT - Separate color from material modifiers:**
+- If you see "Breakaway White" - the COLOR is "White" and the MATERIAL is "PLA Support" or "Breakaway PLA"
+- If you see "Support Black" - the COLOR is "Black" and the MATERIAL is "PLA Support"
+- If you see "Silk Gold" - the COLOR is "Gold" and the MATERIAL is "PLA Silk"
+- Words like "Breakaway", "Support", "Silk", "Matte", "Glitter" are MATERIAL modifiers, NOT colors
+
 ## USE YOUR KNOWLEDGE - CRITICAL
 If you identify the brand and product, you MUST use your knowledge to fill in ALL typical specifications including print speed. Do NOT leave fields blank if you can look them up.
 
@@ -111,12 +117,26 @@ Adjust price based on weight (most are 1kg, but some are 0.5kg or 0.25kg)
 
 **IMPORTANT: The "notes" field MUST contain alternative print profiles if the label shows multiple temperature/speed combinations!**
 
-## SEALED STATUS DETECTION
+## SEALED STATUS DETECTION - CRITICAL
 Determine if the spool is still sealed or has been opened:
-- **Sealed (true)**: Spool is wrapped in vacuum-sealed plastic/foil, shrink wrap visible, unopened packaging, desiccant pack visible inside sealed bag
-- **Opened (false)**: Plastic wrap removed, loose filament visible, spool is exposed, filament end is free/clipped to spool, no vacuum seal visible
-- Look for shiny plastic wrap, sealed edges, intact vacuum packaging
-- If the spool is clearly being used or the filament is visible and loose, it's opened
+
+**SEALED (isSealed: true) - if ANY of these are visible:**
+- Spool is inside a vacuum-sealed plastic bag or foil bag
+- Shiny silver/metallic foil packaging visible
+- Vacuum-sealed clear plastic bag (you can see the bag wrapped around the spool)
+- Shrink wrap visible around the spool
+- Sealed edges on packaging
+- Desiccant pack visible inside a sealed bag
+- The spool looks like it just came out of packaging or is still in packaging
+- Handwritten labels on a foil/plastic bag (the bag IS the seal)
+
+**OPENED (isSealed: false) - only if:**
+- Bare spool with NO packaging around it at all
+- Filament end is loose/free and clipped to spool edge
+- Spool is clearly mounted on a printer or dryer
+- Obvious signs of use (filament amount visibly reduced)
+
+**DEFAULT TO SEALED** if the spool is in ANY kind of bag or wrap. Most photos are of sealed spools.
 
 ## PRINT SPEED - MUST FILL IN FOR KNOWN BRANDS
 **You MUST provide a print speed value if you identify the brand.** Look it up from your knowledge.
@@ -127,6 +147,14 @@ Only use REAL product names that actually exist. Examples of REAL products:
 - Bambu Lab does NOT make "High Speed PLA" - their Basic PLA IS high-speed capable but it's called "Basic PLA"
 - Sunlu: "PLA", "PLA+", "High Speed PLA", "PETG", "Silk PLA"
 - ELEGOO: "PLA", "Rapid PLA+", "PETG", "ABS"
+- Snapmaker: "PLA Support" (breakaway support material), "SnapSpeed PLA", "PLA"
+
+### SUPPORT/BREAKAWAY MATERIALS - IMPORTANT
+"Support" and "Breakaway" filaments are SPECIAL MATERIALS designed to break away easily from prints:
+- If label says "Support", "Breakaway", or "Support Br" - the MATERIAL is "PLA Support" not just "PLA"
+- Snapmaker makes "PLA Support" which is a breakaway support material
+- These are NOT regular PLA - they have different properties
+- Example: "Snapmaker PLA Support Breakaway White" = material: "PLA Support", color: "White"
 
 ### Brand-Specific Print Speeds (use these values):
 **Bambu Lab (GRAY/WHITE spools):**
@@ -161,6 +189,7 @@ Only use REAL product names that actually exist. Examples of REAL products:
 ### Material Defaults (if brand unknown):
 - Standard PLA: 40-100mm/s
 - High-Speed/Rapid PLA: 150-300mm/s
+- PLA Support/Breakaway: 40-100mm/s
 - PETG: 40-80mm/s
 - ABS: 40-80mm/s
 - TPU/Flex: 20-40mm/s
@@ -692,6 +721,7 @@ function normalizeMaterialType(material: string): string {
   
   // Special PLA variants that should be kept distinct
   // These have different printing characteristics
+  if (upper.includes('PLA') && (upper.includes('SUPPORT') || upper.includes('BREAKAWAY'))) return 'PLA Support';
   if (upper.includes('PLA') && upper.includes('SILK')) return 'PLA Silk';
   if (upper.includes('PLA') && upper.includes('MATTE')) return 'PLA Matte';
   if (upper.includes('PLA') && (upper.includes('+') || upper.includes('PLUS'))) return 'PLA+';
