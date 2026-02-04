@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "@/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { lookupColorHex } from "@/lib/color-lookup";
+import { useAuth } from "@/lib/auth";
 import {
   Dialog,
   DialogContent,
@@ -84,6 +85,21 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  
+  // Clear stale localStorage data if user changed (e.g., after reset)
+  useEffect(() => {
+    if (user?.id) {
+      const savedUserId = localStorage.getItem('filadex_user_id');
+      if (savedUserId && savedUserId !== String(user.id)) {
+        // Different user - clear all cached import data
+        localStorage.removeItem('filadex_pending_imports');
+        localStorage.removeItem('filadex_mobile_session');
+        console.log('Cleared stale import data from previous user');
+      }
+      localStorage.setItem('filadex_user_id', String(user.id));
+    }
+  }, [user?.id]);
   
   const [activeTab, setActiveTab] = useState<"upload" | "mobile" | "review">("upload");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
