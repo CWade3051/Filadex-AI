@@ -735,13 +735,21 @@ function normalizeMaterialType(material: string): string {
   // Special PETG variants
   if (upper.includes('PETG') && upper.includes('CF')) return 'PETG-CF';
   if (upper.includes('PETG') && upper.includes('HF')) return 'PETG-HF';
+  if (upper.includes('PETG') && upper.includes('TRANSLUCENT')) return 'PETG Translucent';
+  if (upper.includes('PETG') && upper.includes('BASIC')) return 'PETG Basic';
   if (upper.includes('PETG') || upper.includes('PET-G')) return 'PETG';
+  
+  // TPU variants - preserve hardness ratings (95A, 80A, etc.)
+  if (upper.includes('TPU') && upper.includes('AMS')) return 'TPU for AMS';
+  if (upper.includes('TPU') && upper.includes('95A')) return 'TPU 95A';
+  if (upper.includes('TPU') && upper.includes('80A')) return 'TPU 80A';
+  if (upper.includes('TPU') && upper.includes('90A')) return 'TPU 90A';
+  if (upper.includes('TPU') && upper.includes('85A')) return 'TPU 85A';
+  if (upper.includes('TPU') || upper.includes('TPE')) return 'TPU';
   
   // Other materials
   const materialMap: Record<string, string> = {
     'ABS': 'ABS',
-    'TPU': 'TPU',
-    'TPE': 'TPU',
     'ASA': 'ASA',
     'NYLON': 'PA',
     'PA': 'PA',

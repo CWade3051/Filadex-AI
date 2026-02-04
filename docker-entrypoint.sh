@@ -276,18 +276,35 @@ else
       echo "INIT_SAMPLE_DATA is set to true. Adding sample data..."
       PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v ON_ERROR_STOP=0 -c "
         INSERT INTO public.manufacturers (name) VALUES ('Bambu Lab') ON CONFLICT DO NOTHING;
+        -- Base materials
         INSERT INTO public.materials (name) VALUES ('PLA') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA Basic') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('PLA+') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('PLA Support') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('PLA Silk') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('PLA Matte') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA-CF') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA Marble') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA Metal') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA Sparkle') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA Galaxy') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA Glow') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA Wood') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PLA Translucent') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('PETG') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PETG Basic') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('PETG-HF') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PETG-CF') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('PETG Translucent') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('ABS') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('ASA') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('TPU') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('TPU 95A') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('TPU 80A') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('TPU for AMS') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('PA') ON CONFLICT DO NOTHING;
         INSERT INTO public.materials (name) VALUES ('PC') ON CONFLICT DO NOTHING;
+        INSERT INTO public.materials (name) VALUES ('Support For PLA/PETG') ON CONFLICT DO NOTHING;
         INSERT INTO public.diameters (value) VALUES ('1.75') ON CONFLICT DO NOTHING;
         INSERT INTO public.diameters (value) VALUES ('2.85') ON CONFLICT DO NOTHING;
         

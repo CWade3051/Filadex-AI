@@ -46,19 +46,35 @@ npx drizzle-kit push
 # Seed initial data
 echo "🌱 Seeding initial data..."
 PGPASSWORD=filadex_dev psql -h localhost -p 5433 -U filadex_dev -d filadex_dev -v ON_ERROR_STOP=0 -c "
-  -- Materials
+  -- Base materials
   INSERT INTO materials (name) VALUES ('PLA') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA Basic') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('PLA+') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('PLA Support') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('PLA Silk') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('PLA Matte') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA-CF') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA Marble') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA Metal') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA Sparkle') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA Galaxy') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA Glow') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA Wood') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PLA Translucent') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('PETG') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PETG Basic') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('PETG-HF') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PETG-CF') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('PETG Translucent') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('ABS') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('ASA') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('TPU') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('TPU 95A') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('TPU 80A') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('TPU for AMS') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('PA') ON CONFLICT DO NOTHING;
   INSERT INTO materials (name) VALUES ('PC') ON CONFLICT DO NOTHING;
+  INSERT INTO materials (name) VALUES ('Support For PLA/PETG') ON CONFLICT DO NOTHING;
   
   -- Diameters
   INSERT INTO diameters (value) VALUES (1.75) ON CONFLICT DO NOTHING;
