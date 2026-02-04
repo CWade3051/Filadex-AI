@@ -862,7 +862,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 <Upload className="h-4 w-4 mr-2" />
                 {t("ai.uploadPhotos")}
               </TabsTrigger>
-              <TabsTrigger value="mobile" disabled={isProcessing}>
+              <TabsTrigger value="mobile">
                 <Smartphone className="h-4 w-4 mr-2" />
                 {t("ai.mobileUpload")}
               </TabsTrigger>
