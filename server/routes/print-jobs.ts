@@ -190,10 +190,11 @@ export function registerPrintJobRoutes(app: Express): void {
           const filament = await storage.getFilament(usage.filamentId, req.userId);
           if (filament) {
             // Calculate new remaining percentage
-            const totalWeight = parseFloat(filament.totalWeight);
-            const currentRemaining = (parseFloat(filament.remainingPercentage) / 100) * totalWeight;
+            const totalWeightKg = parseFloat(filament.totalWeight);
+            const totalWeightGrams = totalWeightKg * 1000;
+            const currentRemaining = (parseFloat(filament.remainingPercentage) / 100) * totalWeightGrams;
             const newRemaining = Math.max(0, currentRemaining - usage.gramsUsed);
-            const newPercentage = Math.round((newRemaining / totalWeight) * 100);
+            const newPercentage = Math.round((newRemaining / totalWeightGrams) * 100);
 
             // Update filament
             await storage.updateFilament(usage.filamentId, {
@@ -309,10 +310,11 @@ export function registerPrintJobRoutes(app: Express): void {
         for (const usage of filamentUsages) {
           const filament = await storage.getFilament(usage.filamentId, req.userId);
           if (filament) {
-            const totalWeight = parseFloat(filament.totalWeight);
-            const currentRemaining = (parseFloat(filament.remainingPercentage) / 100) * totalWeight;
+            const totalWeightKg = parseFloat(filament.totalWeight);
+            const totalWeightGrams = totalWeightKg * 1000;
+            const currentRemaining = (parseFloat(filament.remainingPercentage) / 100) * totalWeightGrams;
             const newRemaining = Math.max(0, currentRemaining - usage.gramsUsed);
-            const newPercentage = Math.round((newRemaining / totalWeight) * 100);
+            const newPercentage = Math.round((newRemaining / totalWeightGrams) * 100);
 
             await storage.updateFilament(usage.filamentId, {
               remainingPercentage: newPercentage.toString(),
