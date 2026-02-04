@@ -723,19 +723,29 @@ export function registerCloudBackupRoutes(app: Express) {
 
       // Add user's filament images to the archive
       const imagesDir = path.join(process.cwd(), "public", "uploads", "filaments");
+      appLogger.info(`Backup: Looking for images in: ${imagesDir}`);
+      appLogger.info(`Backup: Directory exists: ${fs.existsSync(imagesDir)}`);
+      
       if (fs.existsSync(imagesDir)) {
         // Get list of image URLs from user's filaments
         const userImageUrls = backupData.data.filaments
           .map((f: any) => f.imageUrl)
           .filter((url: string | null) => url && url.startsWith("/uploads/filaments/"));
 
+        appLogger.info(`Backup: Found ${userImageUrls.length} image URLs in filaments`);
+        appLogger.info(`Backup: Sample filament data: ${JSON.stringify(backupData.data.filaments[0])}`);
+
+        let imagesAdded = 0;
         for (const imageUrl of userImageUrls) {
           const imageName = path.basename(imageUrl);
           const imagePath = path.join(imagesDir, imageName);
+          appLogger.info(`Backup: Checking image: ${imagePath}, exists: ${fs.existsSync(imagePath)}`);
           if (fs.existsSync(imagePath)) {
             archive.file(imagePath, { name: `images/${imageName}` });
+            imagesAdded++;
           }
         }
+        appLogger.info(`Backup: Added ${imagesAdded} images to archive`);
       }
 
       await archive.finalize();
