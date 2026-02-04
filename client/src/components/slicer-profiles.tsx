@@ -69,16 +69,16 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const [filterManufacturer, setFilterManufacturer] = useState<string>("");
-  const [filterMaterial, setFilterMaterial] = useState<string>("");
+  const [filterManufacturer, setFilterManufacturer] = useState<string>("all");
+  const [filterMaterial, setFilterMaterial] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Upload form state
   const [uploadName, setUploadName] = useState("");
-  const [uploadManufacturer, setUploadManufacturer] = useState("");
-  const [uploadMaterial, setUploadMaterial] = useState("");
-  const [uploadPrinter, setUploadPrinter] = useState("");
-  const [uploadSlicerVersion, setUploadSlicerVersion] = useState("");
+  const [uploadManufacturer, setUploadManufacturer] = useState("none");
+  const [uploadMaterial, setUploadMaterial] = useState("none");
+  const [uploadPrinter, setUploadPrinter] = useState("none");
+  const [uploadSlicerVersion, setUploadSlicerVersion] = useState("none");
   const [uploadNotes, setUploadNotes] = useState("");
   const [uploadIsPublic, setUploadIsPublic] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -91,13 +91,23 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
 
   // Fetch manufacturers for filter
   const { data: manufacturers = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ["/api/settings/manufacturers"],
+    queryKey: ["/api/manufacturers"],
     enabled: open,
   });
 
   // Fetch materials for filter
   const { data: materials = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ["/api/settings/materials"],
+    queryKey: ["/api/materials"],
+    enabled: open,
+  });
+
+  const { data: printers = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/printers"],
+    enabled: open,
+  });
+
+  const { data: slicers = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/slicers"],
     enabled: open,
   });
 
@@ -163,10 +173,10 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
   const resetUploadForm = () => {
     setShowUploadForm(false);
     setUploadName("");
-    setUploadManufacturer("");
-    setUploadMaterial("");
-    setUploadPrinter("");
-    setUploadSlicerVersion("");
+    setUploadManufacturer("none");
+    setUploadMaterial("none");
+    setUploadPrinter("none");
+    setUploadSlicerVersion("none");
     setUploadNotes("");
     setUploadIsPublic(false);
     setSelectedFile(null);
@@ -200,10 +210,10 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
     const formData = new FormData();
     formData.append("file", selectedFile);
     formData.append("name", uploadName);
-    if (uploadManufacturer) formData.append("manufacturer", uploadManufacturer);
-    if (uploadMaterial) formData.append("material", uploadMaterial);
-    if (uploadPrinter) formData.append("printerModel", uploadPrinter);
-    if (uploadSlicerVersion) formData.append("slicerVersion", uploadSlicerVersion);
+    if (uploadManufacturer !== "none") formData.append("manufacturer", uploadManufacturer);
+    if (uploadMaterial !== "none") formData.append("material", uploadMaterial);
+    if (uploadPrinter !== "none") formData.append("printerModel", uploadPrinter);
+    if (uploadSlicerVersion !== "none") formData.append("slicerVersion", uploadSlicerVersion);
     if (uploadNotes) formData.append("notes", uploadNotes);
     formData.append("isPublic", String(uploadIsPublic));
 
@@ -254,8 +264,8 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
 
   // Filter profiles
   const filteredProfiles = profiles.filter((profile) => {
-    if (filterManufacturer && profile.manufacturer !== filterManufacturer) return false;
-    if (filterMaterial && profile.material !== filterMaterial) return false;
+    if (filterManufacturer !== "all" && profile.manufacturer !== filterManufacturer) return false;
+    if (filterMaterial !== "all" && profile.material !== filterMaterial) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -299,7 +309,7 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                   <SelectValue placeholder="Manufacturer" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
                   {manufacturers.map((m) => (
                     <SelectItem key={m.id} value={m.name}>
                       {m.name}
@@ -312,7 +322,7 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                   <SelectValue placeholder="Material" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
                   {materials.map((m) => (
                     <SelectItem key={m.id} value={m.name}>
                       {m.name}
@@ -365,7 +375,7 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                         <SelectValue placeholder="Select manufacturer" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {manufacturers.map((m) => (
                           <SelectItem key={m.id} value={m.name}>
                             {m.name}
@@ -381,7 +391,7 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                         <SelectValue placeholder="Select material" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {materials.map((m) => (
                           <SelectItem key={m.id} value={m.name}>
                             {m.name}
@@ -395,19 +405,35 @@ export function SlicerProfiles({ open, onOpenChange }: SlicerProfilesProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Printer Model</Label>
-                    <Input
-                      value={uploadPrinter}
-                      onChange={(e) => setUploadPrinter(e.target.value)}
-                      placeholder="e.g., Bambu Lab X1C"
-                    />
+                    <Select value={uploadPrinter} onValueChange={setUploadPrinter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select printer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {printers.map((p) => (
+                          <SelectItem key={p.id} value={p.name}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Slicer Version</Label>
-                    <Input
-                      value={uploadSlicerVersion}
-                      onChange={(e) => setUploadSlicerVersion(e.target.value)}
-                      placeholder="e.g., OrcaSlicer 2.0"
-                    />
+                    <Select value={uploadSlicerVersion} onValueChange={setUploadSlicerVersion}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select slicer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {slicers.map((s) => (
+                          <SelectItem key={s.id} value={s.name}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
