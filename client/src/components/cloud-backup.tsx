@@ -132,7 +132,7 @@ const OAUTH_PROVIDERS = [
 
 export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
   const { toast } = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, logout } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const adminFileInputRef = useRef<HTMLInputElement>(null);
@@ -352,9 +352,6 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/filaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cloud-backup/history"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/material-compatibility"] });
       const parts = [];
       if (data.restored.filaments) parts.push(`${data.restored.filaments} filaments`);
       if (data.restored.printJobs) parts.push(`${data.restored.printJobs} print jobs`);
@@ -366,8 +363,15 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
       if (data.restored.userSettings) parts.push("user settings");
       toast({
         title: "Restore Complete",
-        description: parts.length > 0 ? `Restored ${parts.join(", ")}.` : "No new data to restore.",
+        description: parts.length > 0 ? `Restored ${parts.join(", ")}. Please log in again.` : "No new data to restore.",
+        duration: 5000,
       });
+      // Close dialog and force re-login to ensure session is valid
+      onOpenChange(false);
+      setTimeout(() => {
+        logout();
+        window.location.href = "/login";
+      }, 1500);
     },
     onError: (error: Error) => {
       toast({ title: "Restore Failed", description: error.message, variant: "destructive" });
@@ -389,9 +393,6 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/filaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cloud-backup/history"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/material-compatibility"] });
       const parts = [];
       if (data.restored.users) parts.push(`${data.restored.users} new users`);
       if (data.restored.filaments) parts.push(`${data.restored.filaments} filaments`);
@@ -403,8 +404,15 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
       if (data.restored.images) parts.push(`${data.restored.images} images`);
       toast({
         title: "Admin Restore Complete",
-        description: parts.length > 0 ? `Restored ${parts.join(", ")}. ${data.note || ""}` : "No new data to restore.",
+        description: parts.length > 0 ? `Restored ${parts.join(", ")}. ${data.note || ""} Please log in again.` : "No new data to restore.",
+        duration: 5000,
       });
+      // Close dialog and force re-login to ensure session is valid with restored user data
+      onOpenChange(false);
+      setTimeout(() => {
+        logout();
+        window.location.href = "/login";
+      }, 1500);
     },
     onError: (error: Error) => {
       toast({ title: "Admin Restore Failed", description: error.message, variant: "destructive" });
