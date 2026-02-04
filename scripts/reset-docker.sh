@@ -27,7 +27,10 @@ echo "🗑️  Resetting Production Docker Environment..."
 echo "📦 Removing Docker containers and volumes..."
 docker compose down -v
 
-# Start fresh
+# Pull latest image and start fresh
+echo "📦 Pulling latest Docker images..."
+docker compose pull
+
 echo "📦 Starting fresh Docker environment..."
 docker compose up -d
 
