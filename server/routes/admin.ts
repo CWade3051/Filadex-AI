@@ -172,13 +172,21 @@ export function registerAdminRoutes(app: Express): void {
         await db.insert(storageLocations).values(location).onConflictDoNothing();
       }
 
+      // Seed printers
+      const defaultPrinters = [
+        "Bambu Lab P2S", "Bambu Lab H2C", "FLSun S1 Pro", "SnapMaker U1"
+      ];
+      for (let i = 0; i < defaultPrinters.length; i++) {
+        await db.insert(printers).values({ name: defaultPrinters[i], sortOrder: i + 1 }).onConflictDoNothing();
+      }
+
       // Seed slicers
       const defaultSlicers = [
         "Bambu Studio", "Orca Slicer", "PrusaSlicer", "Cura", "SuperSlicer",
         "Simplify3D", "IdeaMaker", "FlashPrint", "Creality Print", "FLSUN Slicer"
       ];
-      for (const name of defaultSlicers) {
-        await db.insert(slicers).values({ name }).onConflictDoNothing();
+      for (let i = 0; i < defaultSlicers.length; i++) {
+        await db.insert(slicers).values({ name: defaultSlicers[i], sortOrder: i + 1 }).onConflictDoNothing();
       }
 
       appLogger.info("Default data seeded successfully.");

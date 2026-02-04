@@ -185,6 +185,28 @@ docker compose exec -T db psql -U filadex -d filadex << 'EOF'
   INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('FLSUN S1 Pro', 'Spool attached to FLSUN S1 Pro printer, acts as dryer', 1, 200) ON CONFLICT DO NOTHING;
   INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('Creality Dryer', 'Creality dryer unit, holds up to 2 spools', 2, 201) ON CONFLICT DO NOTHING;
   INSERT INTO storage_locations (name, description, capacity, sort_order) VALUES ('Polymaker Dryer', 'Polymaker dryer unit, holds 1 spool', 1, 202) ON CONFLICT DO NOTHING;
+  
+  -- =========================================
+  -- Printers
+  -- =========================================
+  INSERT INTO printers (name, sort_order) VALUES ('Bambu Lab P2S', 1) ON CONFLICT DO NOTHING;
+  INSERT INTO printers (name, sort_order) VALUES ('Bambu Lab H2C', 2) ON CONFLICT DO NOTHING;
+  INSERT INTO printers (name, sort_order) VALUES ('FLSun S1 Pro', 3) ON CONFLICT DO NOTHING;
+  INSERT INTO printers (name, sort_order) VALUES ('SnapMaker U1', 4) ON CONFLICT DO NOTHING;
+  
+  -- =========================================
+  -- Slicers (popular slicer software)
+  -- =========================================
+  INSERT INTO slicers (name, sort_order) VALUES ('Bambu Studio', 1) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('Orca Slicer', 2) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('PrusaSlicer', 3) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('Cura', 4) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('SuperSlicer', 5) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('Simplify3D', 6) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('IdeaMaker', 7) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('FlashPrint', 8) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('Creality Print', 9) ON CONFLICT DO NOTHING;
+  INSERT INTO slicers (name, sort_order) VALUES ('FLSUN Slicer', 10) ON CONFLICT DO NOTHING;
 EOF
 
 # Check for OPENAI_API_KEY in .env and add to admin user if present

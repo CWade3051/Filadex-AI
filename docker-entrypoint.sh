@@ -537,17 +537,23 @@ else
         INSERT INTO public.storage_locations (name, description, capacity) VALUES ('Creality Dryer', 'Creality dryer unit, holds up to 2 spools', 2) ON CONFLICT DO NOTHING;
         INSERT INTO public.storage_locations (name, description, capacity) VALUES ('Polymaker Dryer', 'Polymaker dryer unit, holds 1 spool', 1) ON CONFLICT DO NOTHING;
         
+        -- Printers
+        INSERT INTO public.printers (name, sort_order) VALUES ('Bambu Lab P2S', 1) ON CONFLICT DO NOTHING;
+        INSERT INTO public.printers (name, sort_order) VALUES ('Bambu Lab H2C', 2) ON CONFLICT DO NOTHING;
+        INSERT INTO public.printers (name, sort_order) VALUES ('FLSun S1 Pro', 3) ON CONFLICT DO NOTHING;
+        INSERT INTO public.printers (name, sort_order) VALUES ('SnapMaker U1', 4) ON CONFLICT DO NOTHING;
+        
         -- Slicers
-        INSERT INTO public.slicers (name) VALUES ('Bambu Studio') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('Orca Slicer') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('PrusaSlicer') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('Cura') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('SuperSlicer') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('Simplify3D') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('IdeaMaker') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('FlashPrint') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('Creality Print') ON CONFLICT DO NOTHING;
-        INSERT INTO public.slicers (name) VALUES ('FLSUN Slicer') ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('Bambu Studio', 1) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('Orca Slicer', 2) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('PrusaSlicer', 3) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('Cura', 4) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('SuperSlicer', 5) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('Simplify3D', 6) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('IdeaMaker', 7) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('FlashPrint', 8) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('Creality Print', 9) ON CONFLICT DO NOTHING;
+        INSERT INTO public.slicers (name, sort_order) VALUES ('FLSUN Slicer', 10) ON CONFLICT DO NOTHING;
       "
       echo "Basic data inserted!"
 
