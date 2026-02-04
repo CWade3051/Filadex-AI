@@ -824,10 +824,25 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                   </p>
                   
                   {isProcessing ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex items-center justify-center gap-2 text-orange-500">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        {t("ai.processingPhotos") || `Processing ${pendingPhotoCount} photo(s) with AI...`}
+                        <span className="font-medium">
+                          {t("ai.processingPhotos") || "Processing with AI..."}
+                        </span>
+                      </div>
+                      <div className="w-full max-w-xs mx-auto">
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                          <span>{processedImages.length} completed</span>
+                          <span>{pendingPhotoCount} pending</span>
+                        </div>
+                        <Progress 
+                          value={pendingPhotoCount > 0 ? (processedImages.length / (processedImages.length + pendingPhotoCount)) * 100 : 0} 
+                          className="h-2"
+                        />
+                        <p className="text-xs text-center mt-1 text-muted-foreground">
+                          {processedImages.length} of {processedImages.length + pendingPhotoCount} photos processed
+                        </p>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {t("ai.canUploadMoreWhileProcessing") || "You can upload more photos while processing"}

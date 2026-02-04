@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Filament } from "@shared/schema";
 import { FilamentSpool } from "@/components/ui/filament-spool";
 import { Card } from "@/components/ui/card";
-import { Copy, CheckCircle2, ImageIcon, X } from "lucide-react";
+import { Copy, CheckCircle2, ImageIcon, X, Check } from "lucide-react";
 import { useTranslation } from "@/i18n";
+import { useToast } from "@/hooks/use-toast";
 import {
   Tooltip,
   TooltipContent,
@@ -37,7 +38,40 @@ export function FilamentCard({
   onSelect
 }: FilamentCardProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Copy filament info to clipboard
+  const handleCopyToClipboard = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const info = [
+      `Name: ${filament.name}`,
+      `Manufacturer: ${filament.manufacturer || '-'}`,
+      `Material: ${filament.material || '-'}`,
+      `Color: ${filament.colorName || '-'}`,
+      `Diameter: ${filament.diameter || '-'}mm`,
+      `Print Temp: ${filament.printTemp || '-'}`,
+      `Remaining: ${filament.remainingPercentage}%`,
+      filament.notes ? `Notes: ${filament.notes}` : '',
+    ].filter(Boolean).join('\n');
+    
+    try {
+      await navigator.clipboard.writeText(info);
+      setCopied(true);
+      toast({
+        title: "Copied to clipboard",
+        description: "Filament info copied",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
   
   // Calculate the remaining weight
   const totalWeight = Number(filament.totalWeight);
@@ -95,7 +129,11 @@ export function FilamentCard({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <h3
-                    className="font-medium text-lg dark:text-white text-gray-800 truncate min-w-0 cursor-help"
+                    className="font-medium text-lg dark:text-white text-gray-800 truncate min-w-0 cursor-pointer hover:text-primary transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(filament);
+                    }}
                   >
                     {displayName}
                   </h3>
@@ -107,23 +145,19 @@ export function FilamentCard({
                   avoidCollisions={true}
                 >
                   <p className="whitespace-normal">{fullName}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Click to view details</p>
                 </TooltipContent>
               </Tooltip>
             </div>
           {!readOnly && (
             <div className="flex space-x-2 flex-shrink-0 sm:self-start">
-              {onCopy && (
-                <button
-                  className="dark:text-neutral-400 text-gray-500 hover:text-secondary p-1 rounded-full hover:bg-secondary/10 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCopy(filament);
-                  }}
-                  title={t('common.copy')}
-                >
-                  <Copy size={16} />
-                </button>
-              )}
+              <button
+                className="dark:text-neutral-400 text-gray-500 hover:text-secondary p-1 rounded-full hover:bg-secondary/10 transition-colors"
+                onClick={handleCopyToClipboard}
+                title={t('common.copyToClipboard') || "Copy to clipboard"}
+              >
+                {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+              </button>
               <button
                 className="dark:text-neutral-400 text-gray-500 hover:text-primary p-1 rounded-full hover:bg-primary/10 transition-colors"
                 onClick={(e) => {
