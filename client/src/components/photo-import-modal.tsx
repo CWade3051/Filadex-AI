@@ -271,23 +271,37 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     }
   }, [isOpen, processedImages.length]);
   
-  // Start/resume polling when there's an active session (even when modal closed)
+  // Validate session with server when loaded from localStorage
   useEffect(() => {
-    if (mobileSession && !pollingRef.current) {
-      // Check if session is still valid
-      if (new Date(mobileSession.expiresAt) > new Date()) {
-        startPolling(mobileSession.token);
-      } else {
-        // Session expired, clean up
+    if (mobileSession) {
+      // First check client-side expiration
+      if (new Date(mobileSession.expiresAt) <= new Date()) {
         setMobileSession(null);
+        return;
       }
+      
+      // Validate with server (session might not exist after restart)
+      fetch(`/api/ai/upload-session/${mobileSession.token}`, {
+        credentials: "include",
+      }).then(response => {
+        if (!response.ok) {
+          // Session doesn't exist on server, clear it
+          console.log('Mobile session invalid on server, clearing...');
+          setMobileSession(null);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+        } else if (!pollingRef.current) {
+          // Session valid, start polling if not already
+          startPolling(mobileSession.token);
+        }
+      }).catch(() => {
+        // Server error, clear session to be safe
+        setMobileSession(null);
+      });
     }
-    
-    // Cleanup when session ends
-    return () => {
-      // Don't cleanup here - we want polling to continue
-    };
-  }, [mobileSession]);
+  }, [mobileSession?.token]);
   
   // Check session expiration periodically
   useEffect(() => {
