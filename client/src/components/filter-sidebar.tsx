@@ -105,6 +105,18 @@ export function FilterSidebar({
   const [locationPopoverOpen, setLocationPopoverOpen] = useState(false);
   const [maxRemaining, setMaxRemaining] = useState(100);  // Show filaments with AT MOST this %
   const [minRemaining, setMinRemaining] = useState(0);    // Show filaments with AT LEAST this %
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const activeFilterCount = [
+    searchTerm.trim() ? 1 : 0,
+    selectedMaterials.length ? 1 : 0,
+    selectedManufacturers.length ? 1 : 0,
+    selectedColors.length ? 1 : 0,
+    selectedLocations.length ? 1 : 0,
+    maxRemaining !== 100 ? 1 : 0,
+    minRemaining !== 0 ? 1 : 0,
+    showArchived ? 1 : 0,
+  ].reduce((sum, value) => sum + value, 0);
 
   // Laden der Hersteller, Materialien und Farben aus der Datenbank
   const { data: manufacturers = [], isLoading: isLoadingManufacturers } = useQuery({
@@ -281,9 +293,31 @@ export function FilterSidebar({
   };
 
   return (
-    <aside className="dark:bg-neutral-900 bg-white p-4 rounded-lg shadow-md border border-gray-200 dark:border-neutral-700 h-fit lg:sticky lg:top-4 max-h-screen lg:overflow-y-auto">
+    <aside className="dark:bg-neutral-900 bg-white p-4 rounded-lg shadow-md border border-gray-200 dark:border-neutral-700 h-fit lg:sticky lg:top-4 lg:max-h-screen lg:overflow-y-auto">
+      <div className="flex items-center justify-between mb-3 sm:hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-medium dark:text-neutral-400 text-gray-700">{t('filters.searchFilaments')}</span>
+          {activeFilterCount > 0 && (
+            <Badge variant="outline" className="text-xs">
+              {activeFilterCount}
+            </Badge>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2"
+          onClick={() => setMobileFiltersOpen((prev) => !prev)}
+          aria-expanded={mobileFiltersOpen}
+        >
+          <ChevronDown className={cn("h-4 w-4 transition-transform", mobileFiltersOpen && "rotate-180")} />
+        </Button>
+      </div>
+
+      <div className={cn(mobileFiltersOpen ? "block" : "hidden", "sm:block")}>
       <div className="mb-6">
-        <h2 className="text-lg font-medium dark:text-neutral-400 text-gray-700 mb-3">{t('filters.searchFilaments')}</h2>
+        <h2 className="hidden sm:block text-lg font-medium dark:text-neutral-400 text-gray-700 mb-3">{t('filters.searchFilaments')}</h2>
         <div className="relative">
           <Input
             type="text"
@@ -620,7 +654,7 @@ export function FilterSidebar({
         </div>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-2 sm:mb-6">
         <h2 className="text-lg font-medium dark:text-neutral-400 text-gray-700 mb-3">{t('filters.inventory')}</h2>
         <div className="space-y-4">
           {/* Max Remaining Filter - show filaments with AT MOST this % */}
@@ -688,6 +722,7 @@ export function FilterSidebar({
             </div>
           )}
         </div>
+      </div>
       </div>
     </aside>
   );
