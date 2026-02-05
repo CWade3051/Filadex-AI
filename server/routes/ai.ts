@@ -7,6 +7,9 @@ import os from "os";
 import QRCode from "qrcode";
 import { authenticate } from "../auth";
 import { storage } from "../storage";
+import { db } from "../db";
+import { uploadSessions as uploadSessionsTable, pendingUploads as pendingUploadsTable } from "../../shared/schema";
+import { and, eq, desc, inArray, count } from "drizzle-orm";
 import { logger } from "../utils/logger";
 import { encrypt, decrypt, maskApiKey, isValidOpenAIKeyFormat } from "../utils/encryption";
 import { extractFilamentDataFromImage, extractFilamentDataFromImages, validateOpenAIKey, ExtractedFilamentData, VISION_MODELS } from "../utils/openai-vision";
@@ -98,24 +101,14 @@ const upload = multer({
   },
 });
 
-// In-memory store for upload sessions (in production, use Redis or DB)
-const uploadSessions = new Map<string, {
-  userId: number;
-  createdAt: Date;
-  expiresAt: Date;
-  status: "pending" | "uploading" | "processing" | "completed" | "expired";
-  images: { filename: string; imageUrl: string; extractedData?: ExtractedFilamentData; error?: string }[];
-}>();
-
-// Clean up expired sessions every 5 minutes
-setInterval(() => {
-  const now = new Date();
-  for (const [token, session] of uploadSessions.entries()) {
-    if (session.expiresAt < now) {
-      uploadSessions.delete(token);
-    }
+function parseExtractedData(raw?: string | null): ExtractedFilamentData | undefined {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as ExtractedFilamentData;
+  } catch {
+    return undefined;
   }
-}, 5 * 60 * 1000);
+}
 
 /**
  * Get OpenAI API key - first check user's stored key, then fall back to env var
@@ -377,13 +370,43 @@ export function registerAIRoutes(app: Express): void {
         extractedData: result.data,
         error: result.error,
       }));
+
+      const sessionToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const [session] = await db
+        .insert(uploadSessionsTable)
+        .values({
+          sessionToken,
+          userId: req.userId,
+          status: "completed",
+          expiresAt,
+        })
+        .returning({ id: uploadSessionsTable.id });
+
+      const pendingRows = processedResults.map((result) => ({
+        sessionId: session.id,
+        imageUrl: result.imageUrl,
+        extractedData: result.extractedData ? JSON.stringify(result.extractedData) : null,
+        status: result.error ? "error" : "ready",
+        errorMessage: result.error || null,
+      }));
+
+      const inserted = await db
+        .insert(pendingUploadsTable)
+        .values(pendingRows)
+        .returning({ id: pendingUploadsTable.id });
+
+      const resultsWithIds = processedResults.map((result, index) => ({
+        ...result,
+        pendingUploadId: inserted[index]?.id,
+      }));
       
       res.json({
         success: true,
         total: files.length,
         processed: processedResults.filter((r) => !r.error).length,
         failed: processedResults.filter((r) => r.error).length,
-        results: processedResults,
+        results: resultsWithIds,
       });
     } catch (error) {
       logger.error("Error in bulk extraction:", error);
@@ -413,14 +436,12 @@ export function registerAIRoutes(app: Express): void {
       
       // Session expires in 30 minutes
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-      
-      // Store session
-      uploadSessions.set(sessionToken, {
+
+      await db.insert(uploadSessionsTable).values({
+        sessionToken,
         userId: req.userId,
-        createdAt: new Date(),
-        expiresAt,
         status: "pending",
-        images: [],
+        expiresAt,
       });
       
       // Generate QR code with upload URL using local network IP
@@ -459,28 +480,48 @@ export function registerAIRoutes(app: Express): void {
   app.get("/api/ai/upload-session/:token", authenticate, async (req: Request, res: Response) => {
     try {
       const { token } = req.params;
-      const session = uploadSessions.get(token);
-      
+      const sessionRows = await db
+        .select()
+        .from(uploadSessionsTable)
+        .where(eq(uploadSessionsTable.sessionToken, token))
+        .limit(1);
+
+      const session = sessionRows[0];
       if (!session) {
         return res.status(404).json({ message: "Session not found or expired" });
       }
-      
+
       if (session.userId !== req.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
-      if (session.expiresAt < new Date()) {
-        uploadSessions.delete(token);
-        return res.status(410).json({ message: "Session expired" });
+
+      if (session.expiresAt < new Date() && session.status !== "expired") {
+        await db
+          .update(uploadSessionsTable)
+          .set({ status: "expired" })
+          .where(eq(uploadSessionsTable.id, session.id));
       }
-      
-      const processedCount = session.images.filter(img => img.extractedData || img.error).length;
-      const pendingCount = session.images.filter(img => !img.extractedData && !img.error).length;
-      
+
+      const uploads = await db
+        .select()
+        .from(pendingUploadsTable)
+        .where(eq(pendingUploadsTable.sessionId, session.id))
+        .orderBy(desc(pendingUploadsTable.createdAt));
+
+      const images = uploads.map((upload) => ({
+        id: upload.id,
+        imageUrl: upload.imageUrl,
+        extractedData: parseExtractedData(upload.extractedData),
+        error: upload.errorMessage || undefined,
+      }));
+
+      const processedCount = uploads.filter((img) => img.extractedData || img.errorMessage).length;
+      const pendingCount = uploads.length - processedCount;
+
       res.json({
         status: session.status,
-        imageCount: session.images.length,
-        images: session.images,
+        imageCount: uploads.length,
+        images,
         processedCount,
         pendingCount,
         processing: session.status === "processing",
@@ -498,14 +539,22 @@ export function registerAIRoutes(app: Express): void {
   app.post("/api/ai/mobile-upload/:token", upload.array("images", 50), async (req: Request, res: Response) => {
     try {
       const { token } = req.params;
-      const session = uploadSessions.get(token);
-      
+      const sessionRows = await db
+        .select()
+        .from(uploadSessionsTable)
+        .where(eq(uploadSessionsTable.sessionToken, token))
+        .limit(1);
+
+      const session = sessionRows[0];
       if (!session) {
         return res.status(404).json({ message: "Session not found or expired" });
       }
-      
+
       if (session.expiresAt < new Date()) {
-        uploadSessions.delete(token);
+        await db
+          .update(uploadSessionsTable)
+          .set({ status: "expired" })
+          .where(eq(uploadSessionsTable.id, session.id));
         return res.status(410).json({ message: "Session expired" });
       }
       
@@ -514,21 +563,28 @@ export function registerAIRoutes(app: Express): void {
         return res.status(400).json({ message: "No images provided" });
       }
       
-      // Update session status
-      session.status = "uploading";
-      
-      // Add uploaded images to session
-      for (const file of files) {
-        session.images.push({
-          filename: file.filename,
-          imageUrl: `/uploads/filaments/${file.filename}`,
-        });
-      }
+      await db
+        .update(uploadSessionsTable)
+        .set({ status: "uploading" })
+        .where(eq(uploadSessionsTable.id, session.id));
+
+      const pendingRows = files.map((file) => ({
+        sessionId: session.id,
+        imageUrl: `/uploads/filaments/${file.filename}`,
+        status: "pending",
+      }));
+
+      await db.insert(pendingUploadsTable).values(pendingRows);
+
+      const totalCount = await db
+        .select({ total: count() })
+        .from(pendingUploadsTable)
+        .where(eq(pendingUploadsTable.sessionId, session.id));
       
       res.json({
         success: true,
         uploaded: files.length,
-        total: session.images.length,
+        total: totalCount[0]?.total ?? files.length,
       });
     } catch (error) {
       logger.error("Error in mobile upload:", error);
@@ -543,27 +599,47 @@ export function registerAIRoutes(app: Express): void {
   app.post("/api/ai/upload-session/:token/process", authenticate, async (req: Request, res: Response) => {
     try {
       const { token } = req.params;
-      const session = uploadSessions.get(token);
-      
+      const sessionRows = await db
+        .select()
+        .from(uploadSessionsTable)
+        .where(eq(uploadSessionsTable.sessionToken, token))
+        .limit(1);
+
+      const session = sessionRows[0];
       if (!session) {
         return res.status(404).json({ message: "Session not found or expired" });
       }
-      
+
       if (session.userId !== req.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
-      // Find images that haven't been processed yet
-      const unprocessedImages = session.images.filter(img => !img.extractedData && !img.error);
-      
+
+      const uploads = await db
+        .select()
+        .from(pendingUploadsTable)
+        .where(eq(pendingUploadsTable.sessionId, session.id))
+        .orderBy(desc(pendingUploadsTable.createdAt));
+
+      const unprocessedImages = uploads.filter(
+        (img) => !img.extractedData && !img.errorMessage && img.status !== "error"
+      );
+
       if (unprocessedImages.length === 0) {
-        // All images already processed, just return current results
+        const results = uploads
+          .filter((img) => img.extractedData || img.errorMessage)
+          .map((img) => ({
+            id: img.id,
+            imageUrl: img.imageUrl,
+            extractedData: parseExtractedData(img.extractedData),
+            error: img.errorMessage || undefined,
+          }));
+
         return res.json({
           success: true,
-          results: session.images,
+          results,
           processing: false,
-          processedCount: session.images.length,
-          totalCount: session.images.length,
+          processedCount: results.length,
+          totalCount: uploads.length,
         });
       }
       
@@ -576,46 +652,85 @@ export function registerAIRoutes(app: Express): void {
       
       // If already processing, just return current status
       if (session.status === "processing") {
-        const processedCount = session.images.filter(img => img.extractedData || img.error).length;
+        const results = uploads
+          .filter((img) => img.extractedData || img.errorMessage)
+          .map((img) => ({
+            id: img.id,
+            imageUrl: img.imageUrl,
+            extractedData: parseExtractedData(img.extractedData),
+            error: img.errorMessage || undefined,
+          }));
+
         return res.json({
           success: true,
-          results: session.images.filter(img => img.extractedData || img.error),
+          results,
           processing: true,
-          processedCount,
-          totalCount: session.images.length,
+          processedCount: results.length,
+          totalCount: uploads.length,
         });
       }
-      
-      session.status = "processing";
+
+      await db
+        .update(uploadSessionsTable)
+        .set({ status: "processing" })
+        .where(eq(uploadSessionsTable.id, session.id));
       
       // Return immediately with current status
+      const currentResults = uploads
+        .filter((img) => img.extractedData || img.errorMessage)
+        .map((img) => ({
+          id: img.id,
+          imageUrl: img.imageUrl,
+          extractedData: parseExtractedData(img.extractedData),
+          error: img.errorMessage || undefined,
+        }));
+
       res.json({
         success: true,
-        results: session.images.filter(img => img.extractedData || img.error),
+        results: currentResults,
         processing: true,
-        processedCount: session.images.filter(img => img.extractedData || img.error).length,
-        totalCount: session.images.length,
+        processedCount: currentResults.length,
+        totalCount: uploads.length,
       });
       
       // Process images one at a time in the background
       (async () => {
         for (const image of unprocessedImages) {
           try {
-            const imagePath = path.join(uploadDir, image.filename);
+            const filename = path.basename(image.imageUrl);
+            const imagePath = path.join(uploadDir, filename);
             const imageBuffer = fs.readFileSync(imagePath);
             const base64Image = imageBuffer.toString("base64");
-            
+
             const extractedData = await extractFilamentDataFromImage(base64Image, apiKey);
-            image.extractedData = extractedData;
-            logger.info(`Processed image: ${image.filename}`);
+            await db
+              .update(pendingUploadsTable)
+              .set({
+                extractedData: JSON.stringify(extractedData),
+                status: "ready",
+                errorMessage: null,
+              })
+              .where(eq(pendingUploadsTable.id, image.id));
+
+            logger.info(`Processed image: ${filename}`);
           } catch (error) {
-            image.error = error instanceof Error ? error.message : "Failed to process image";
-            logger.error(`Error processing image ${image.filename}:`, error);
+            await db
+              .update(pendingUploadsTable)
+              .set({
+                status: "error",
+                errorMessage: error instanceof Error ? error.message : "Failed to process image",
+              })
+              .where(eq(pendingUploadsTable.id, image.id));
+
+            logger.error(`Error processing image ${image.imageUrl}:`, error);
           }
         }
-        
-        session.status = "completed";
-        logger.info(`Session ${token} processing complete. ${session.images.length} images processed.`);
+
+        await db
+          .update(uploadSessionsTable)
+          .set({ status: "completed" })
+          .where(eq(uploadSessionsTable.id, session.id));
+        logger.info(`Session ${token} processing complete. ${uploads.length} images processed.`);
       })();
       
     } catch (error) {
@@ -630,25 +745,220 @@ export function registerAIRoutes(app: Express): void {
   app.delete("/api/ai/upload-session/:token", authenticate, async (req: Request, res: Response) => {
     try {
       const { token } = req.params;
-      const session = uploadSessions.get(token);
-      
+      const sessionRows = await db
+        .select()
+        .from(uploadSessionsTable)
+        .where(eq(uploadSessionsTable.sessionToken, token))
+        .limit(1);
+
+      const session = sessionRows[0];
       if (!session) {
         return res.status(404).json({ message: "Session not found" });
       }
-      
+
       if (session.userId !== req.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
-      // Optionally clean up uploaded files that weren't imported
-      // (we keep them for now in case user wants to retry)
-      
-      uploadSessions.delete(token);
-      
+
+      await db.delete(uploadSessionsTable).where(eq(uploadSessionsTable.id, session.id));
+
       res.json({ success: true });
     } catch (error) {
       logger.error("Error deleting session:", error);
       res.status(500).json({ message: "Failed to delete session" });
+    }
+  });
+
+  /**
+   * Get pending uploads for review (DB-backed)
+   */
+  app.get("/api/ai/pending-uploads", authenticate, async (req: Request, res: Response) => {
+    try {
+      const sessions = await db
+        .select({ id: uploadSessionsTable.id })
+        .from(uploadSessionsTable)
+        .where(eq(uploadSessionsTable.userId, req.userId));
+
+      if (sessions.length === 0) {
+        return res.json({
+          items: [],
+          pendingCount: 0,
+          processedCount: 0,
+          totalCount: 0,
+        });
+      }
+
+      const sessionIds = sessions.map((s) => s.id);
+      const uploads = await db
+        .select()
+        .from(pendingUploadsTable)
+        .where(
+          and(
+            inArray(pendingUploadsTable.sessionId, sessionIds),
+            inArray(pendingUploadsTable.status, ["pending", "processing", "ready", "error"])
+          )
+        )
+        .orderBy(desc(pendingUploadsTable.createdAt));
+
+      const items = uploads.map((upload) => ({
+        id: upload.id,
+        imageUrl: upload.imageUrl,
+        extractedData: parseExtractedData(upload.extractedData),
+        error: upload.errorMessage || undefined,
+        status: upload.status,
+      }));
+
+      const pendingCount = uploads.filter((u) => u.status === "pending" || u.status === "processing").length;
+      const processedCount = uploads.filter((u) => u.status === "ready" || u.status === "error").length;
+
+      res.json({
+        items,
+        pendingCount,
+        processedCount,
+        totalCount: uploads.length,
+      });
+    } catch (error) {
+      logger.error("Error getting pending uploads:", error);
+      res.status(500).json({ message: "Failed to get pending uploads" });
+    }
+  });
+
+  /**
+   * Update a pending upload (notes/remaining/status edits)
+   */
+  app.patch("/api/ai/pending-uploads/:id", authenticate, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      if (Number.isNaN(id)) {
+        return res.status(400).json({ message: "Invalid pending upload id" });
+      }
+
+      const rows = await db
+        .select({ id: pendingUploadsTable.id })
+        .from(pendingUploadsTable)
+        .innerJoin(uploadSessionsTable, eq(pendingUploadsTable.sessionId, uploadSessionsTable.id))
+        .where(and(eq(pendingUploadsTable.id, id), eq(uploadSessionsTable.userId, req.userId)))
+        .limit(1);
+
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "Pending upload not found" });
+      }
+
+      const { extractedData } = req.body;
+      if (!extractedData) {
+        return res.status(400).json({ message: "No extracted data provided" });
+      }
+
+      await db
+        .update(pendingUploadsTable)
+        .set({
+          extractedData: JSON.stringify(extractedData),
+          status: "ready",
+          errorMessage: null,
+        })
+        .where(eq(pendingUploadsTable.id, id));
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error("Error updating pending upload:", error);
+      res.status(500).json({ message: "Failed to update pending upload" });
+    }
+  });
+
+  /**
+   * Remove a single pending upload
+   */
+  app.delete("/api/ai/pending-uploads/:id", authenticate, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      if (Number.isNaN(id)) {
+        return res.status(400).json({ message: "Invalid pending upload id" });
+      }
+
+      const rows = await db
+        .select({ id: pendingUploadsTable.id })
+        .from(pendingUploadsTable)
+        .innerJoin(uploadSessionsTable, eq(pendingUploadsTable.sessionId, uploadSessionsTable.id))
+        .where(and(eq(pendingUploadsTable.id, id), eq(uploadSessionsTable.userId, req.userId)))
+        .limit(1);
+
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "Pending upload not found" });
+      }
+
+      await db.delete(pendingUploadsTable).where(eq(pendingUploadsTable.id, id));
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error("Error deleting pending upload:", error);
+      res.status(500).json({ message: "Failed to delete pending upload" });
+    }
+  });
+
+  /**
+   * Clear all pending uploads for the user
+   */
+  app.delete("/api/ai/pending-uploads", authenticate, async (req: Request, res: Response) => {
+    try {
+      const sessions = await db
+        .select({ id: uploadSessionsTable.id })
+        .from(uploadSessionsTable)
+        .where(eq(uploadSessionsTable.userId, req.userId));
+
+      if (sessions.length === 0) {
+        return res.json({ success: true });
+      }
+
+      const sessionIds = sessions.map((s) => s.id);
+      await db
+        .delete(pendingUploadsTable)
+        .where(
+          and(
+            inArray(pendingUploadsTable.sessionId, sessionIds),
+            inArray(pendingUploadsTable.status, ["pending", "processing", "ready", "error"])
+          )
+        );
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error("Error clearing pending uploads:", error);
+      res.status(500).json({ message: "Failed to clear pending uploads" });
+    }
+  });
+
+  /**
+   * Mark a set of pending uploads as imported (bulk delete)
+   */
+  app.post("/api/ai/pending-uploads/mark-imported", authenticate, async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "No pending upload ids provided" });
+      }
+
+      const sessions = await db
+        .select({ id: uploadSessionsTable.id })
+        .from(uploadSessionsTable)
+        .where(eq(uploadSessionsTable.userId, req.userId));
+
+      if (sessions.length === 0) {
+        return res.json({ success: true });
+      }
+
+      const sessionIds = sessions.map((s) => s.id);
+      await db
+        .delete(pendingUploadsTable)
+        .where(
+          and(
+            inArray(pendingUploadsTable.sessionId, sessionIds),
+            inArray(pendingUploadsTable.id, ids)
+          )
+        );
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error("Error marking pending uploads as imported:", error);
+      res.status(500).json({ message: "Failed to mark pending uploads as imported" });
     }
   });
   
@@ -659,8 +969,13 @@ export function registerAIRoutes(app: Express): void {
    */
   app.get("/mobile-upload/:token", async (req: Request, res: Response) => {
     const { token } = req.params;
-    const session = uploadSessions.get(token);
-    
+    const sessionRows = await db
+      .select()
+      .from(uploadSessionsTable)
+      .where(eq(uploadSessionsTable.sessionToken, token))
+      .limit(1);
+    const session = sessionRows[0];
+
     if (!session || session.expiresAt < new Date()) {
       return res.send(`
         <!DOCTYPE html>

@@ -172,6 +172,25 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS public.upload_sessions (
+    id SERIAL PRIMARY KEY,
+    session_token TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'pending',
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS public.pending_uploads (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER NOT NULL REFERENCES public.upload_sessions(id) ON DELETE CASCADE,
+    image_url TEXT NOT NULL,
+    extracted_data TEXT,
+    status TEXT DEFAULT 'pending',
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  );
+
   -- Phase 2: Print Job Logging
   CREATE TABLE IF NOT EXISTS public.print_jobs (
     id SERIAL PRIMARY KEY,
@@ -289,7 +308,7 @@ PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -v
 "
 
 # Check if the tables were created
-for TABLE in users manufacturers materials colors diameters storage_locations filaments user_sharing print_jobs filament_history material_compatibility slicer_profiles filament_slicer_profiles cloud_backup_configs backup_history; do
+for TABLE in users manufacturers materials colors diameters storage_locations filaments user_sharing upload_sessions pending_uploads print_jobs filament_history material_compatibility slicer_profiles filament_slicer_profiles cloud_backup_configs backup_history; do
   EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d "$PGDATABASE" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$TABLE')")
   echo "Table $TABLE created: $EXISTS"
 done

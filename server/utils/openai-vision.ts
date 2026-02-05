@@ -491,7 +491,7 @@ function cleanExtractedData(data: ExtractedFilamentData): ExtractedFilamentData 
     }
   }
 
-  if (cleaned.remainingPercentage === undefined && cleaned.scaleGrams && cleaned.manufacturer) {
+  if (cleaned.scaleGrams && cleaned.manufacturer) {
     const mfr = cleaned.manufacturer.toLowerCase();
     if (mfr.includes('bambu')) {
       const raw = `${data.rawText || ''} ${data.notes || ''}`.toLowerCase();
@@ -504,7 +504,10 @@ function cleanExtractedData(data: ExtractedFilamentData): ExtractedFilamentData 
         0,
         Math.min(100, Math.round((remainingGrams / totalWeightGrams) * 100))
       );
-      cleaned.remainingPercentage = remainingPercentage;
+
+      if (cleaned.remainingPercentage === undefined) {
+        cleaned.remainingPercentage = remainingPercentage;
+      }
 
       const scaleNote = `Scale detected: ${Math.round(cleaned.scaleGrams)}g, tare ${tareGrams}g, remaining ${Math.round(remainingGrams)}g (~${remainingPercentage}%).`;
       const hasScaleNote = (cleaned.notes || '').toLowerCase().includes('scale detected');

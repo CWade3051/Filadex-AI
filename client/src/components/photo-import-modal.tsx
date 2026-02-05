@@ -63,6 +63,7 @@ interface ExtractedFilamentData {
 }
 
 interface ProcessedImage {
+  pendingUploadId?: number;
   imageUrl: string;
   originalName?: string;
   extractedData?: ExtractedFilamentData;
@@ -106,18 +107,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   const [activeTab, setActiveTab] = useState<"upload" | "mobile" | "review">("upload");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   
-  // Load persisted processed images from localStorage on init
-  const [processedImages, setProcessedImages] = useState<ProcessedImage[]>(() => {
-    try {
-      const saved = localStorage.getItem('filadex_pending_imports');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.error('Failed to load saved imports:', e);
-    }
-    return [];
-  });
+  const [processedImages, setProcessedImages] = useState<ProcessedImage[]>([]);
   
   // Load persisted processing state from localStorage
   const [isProcessing, setIsProcessing] = useState(() => {
@@ -168,19 +158,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     return null;
   });
   const [isPolling, setIsPolling] = useState(false);
-  // Load persisted pending photo count from localStorage
-  const [pendingPhotoCount, setPendingPhotoCount] = useState(() => {
-    try {
-      const saved = localStorage.getItem('filadex_processing_state');
-      if (saved) {
-        const state = JSON.parse(saved);
-        return state.pendingCount || 0;
-      }
-    } catch (e) {
-      console.error('Failed to load pending count:', e);
-    }
-    return 0;
-  }); // Photos uploaded but not yet processed
+  const [pendingPhotoCount, setPendingPhotoCount] = useState(0); // Photos uploaded but not yet processed
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const processingPollingRef = useRef<NodeJS.Timeout | null>(null); // For polling processing results
   const detectedUploadUrlsRef = useRef<Set<string>>(new Set()); // Track uploads detected by startPolling (prevents re-detection)
@@ -199,19 +177,6 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     }
   }, []);
   
-  // Persist processed images to localStorage
-  useEffect(() => {
-    try {
-      if (processedImages.length > 0) {
-        localStorage.setItem('filadex_pending_imports', JSON.stringify(processedImages));
-      } else {
-        localStorage.removeItem('filadex_pending_imports');
-      }
-    } catch (e) {
-      console.error('Failed to save imports:', e);
-    }
-  }, [processedImages]);
-  
   // Persist mobile session to localStorage
   useEffect(() => {
     try {
@@ -224,23 +189,6 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       console.error('Failed to save session:', e);
     }
   }, [mobileSession]);
-
-  // Persist processing state to localStorage
-  useEffect(() => {
-    try {
-      if (isProcessing || processingProgress.total > 0 || pendingPhotoCount > 0) {
-        localStorage.setItem('filadex_processing_state', JSON.stringify({
-          isProcessing,
-          progress: processingProgress,
-          pendingCount: pendingPhotoCount
-        }));
-      } else {
-        localStorage.removeItem('filadex_processing_state');
-      }
-    } catch (e) {
-      console.error('Failed to save processing state:', e);
-    }
-  }, [isProcessing, processingProgress, pendingPhotoCount]);
 
   const deleteUploadSession = async (token: string) => {
     try {
@@ -257,6 +205,10 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     if (mobileSession?.token) {
       deleteUploadSession(mobileSession.token);
     }
+    fetch("/api/ai/pending-uploads", {
+      method: "DELETE",
+      credentials: "include",
+    }).catch((e) => console.error("Failed to clear pending uploads:", e));
     setProcessedImages([]);
     setSelectedFiles([]);
     setPendingPhotoCount(0);
@@ -279,8 +231,6 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     importedUrlsRef.current.clear();
 
     try {
-      localStorage.removeItem('filadex_pending_imports');
-      localStorage.removeItem('filadex_processing_state');
       localStorage.removeItem('filadex_mobile_session');
       localStorage.removeItem('filadex_imported_urls');
     } catch (e) {
@@ -300,6 +250,12 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
           console.error('Failed to save imported URLs:', e);
         }
       }
+      if (target?.pendingUploadId) {
+        fetch(`/api/ai/pending-uploads/${target.pendingUploadId}`, {
+          method: "DELETE",
+          credentials: "include",
+        }).catch((e) => console.error("Failed to delete pending upload:", e));
+      }
       return prev.filter((_, i) => i !== index);
     });
   };
@@ -317,6 +273,45 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     queryKey: ["/api/ai/api-key/status"],
     enabled: isOpen,
   });
+
+  const { data: pendingUploadsData, refetch: refetchPendingUploads } = useQuery({
+    queryKey: ["/api/ai/pending-uploads"],
+    enabled: isOpen,
+  });
+
+  useEffect(() => {
+    if (!isOpen || !pendingUploadsData) return;
+    const items = pendingUploadsData.items || [];
+    const visibleItems = items.filter((item: any) => item.extractedData || item.error);
+
+    setProcessedImages(
+      visibleItems.map((item: any) => {
+        const remainingPercentage = Number.isFinite(Number(item.extractedData?.remainingPercentage))
+          ? Math.max(0, Math.min(100, Math.round(Number(item.extractedData.remainingPercentage))))
+          : 100;
+
+        return {
+          pendingUploadId: item.id,
+          imageUrl: item.imageUrl,
+          extractedData: item.extractedData,
+          error: item.error,
+          selected: !item.error && (item.extractedData?.confidence ?? 0) > 0.3,
+          notes: item.extractedData?.notes || "",
+          storageLocation: "",
+          status: item.extractedData?.isSealed === false ? "opened" : "sealed",
+          remainingPercentage,
+          lastDryingDate: "",
+        } as ProcessedImage;
+      })
+    );
+
+    const pendingCount = pendingUploadsData.pendingCount ?? 0;
+    const processedCount = pendingUploadsData.processedCount ?? 0;
+    const totalCount = pendingUploadsData.totalCount ?? items.length;
+    setPendingPhotoCount(pendingCount);
+    setProcessingProgress({ current: processedCount, total: totalCount });
+    setIsProcessing(pendingCount > 0);
+  }, [pendingUploadsData, isOpen]);
 
   // Fetch existing options for dropdowns
   const { data: manufacturers = [] } = useQuery<any[]>({
@@ -496,6 +491,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
           : 100;
 
         return {
+          pendingUploadId: result.pendingUploadId,
           imageUrl: result.imageUrl,
           originalName: result.originalName,
           extractedData: result.extractedData,
@@ -511,6 +507,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       setProcessedImages(processed);
       setActiveTab("review");
       setIsProcessing(false);
+      refetchPendingUploads();
     },
     onError: (error: Error) => {
       toast({
@@ -650,6 +647,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                     : 100;
 
                   return {
+                    pendingUploadId: result.id,
                     imageUrl: result.imageUrl,
                     extractedData: result.extractedData,
                     error: result.error,
@@ -673,6 +671,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
               processingPollingRef.current = null;
             }
             setIsProcessing(false);
+            refetchPendingUploads();
             if (processedResults.length > 0) {
               setActiveTab("review");
             }
@@ -683,30 +682,6 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       }
     }, 2000); // Poll every 2 seconds for faster updates
   };
-
-  // Sync state from localStorage when modal opens (handles case where component stays mounted)
-  useEffect(() => {
-    if (isOpen) {
-      try {
-        const saved = localStorage.getItem('filadex_processing_state');
-        if (saved) {
-          const state = JSON.parse(saved);
-          console.log('Restoring processing state:', state);
-          if (state.isProcessing) {
-            setIsProcessing(state.isProcessing);
-          }
-          if (state.progress) {
-            setProcessingProgress(state.progress);
-          }
-          if (state.pendingCount !== undefined) {
-            setPendingPhotoCount(state.pendingCount);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to restore processing state:', e);
-      }
-    }
-  }, [isOpen]);
 
   // Resume polling when modal opens and there's an active session with processing
   useEffect(() => {
@@ -808,6 +783,19 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       // Mark imported images as permanently imported (prevents re-adding after import)
       setProcessedImages(prev => {
         const importedImages = prev.filter(img => img.selected);
+        const importedIds = importedImages
+          .map(img => img.pendingUploadId)
+          .filter((id): id is number => typeof id === "number");
+
+        if (importedIds.length > 0) {
+          fetch("/api/ai/pending-uploads/mark-imported", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ ids: importedIds }),
+          }).catch((e) => console.error("Failed to mark pending uploads imported:", e));
+        }
+
         importedImages.forEach(img => {
           if (img.imageUrl) {
             importedUrlsRef.current.add(img.imageUrl);
@@ -845,6 +833,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       
       // Close the modal after successful import
       onClose();
+      refetchPendingUploads();
     },
   });
 
@@ -888,6 +877,23 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     );
   };
 
+  const pendingUploadSaveTimers = useRef<Record<number, NodeJS.Timeout>>({});
+
+  const schedulePendingUploadSave = (id?: number, extractedData?: ExtractedFilamentData) => {
+    if (!id || !extractedData) return;
+    if (pendingUploadSaveTimers.current[id]) {
+      clearTimeout(pendingUploadSaveTimers.current[id]);
+    }
+    pendingUploadSaveTimers.current[id] = setTimeout(() => {
+      fetch(`/api/ai/pending-uploads/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ extractedData }),
+      }).catch((e) => console.error("Failed to update pending upload:", e));
+    }, 500);
+  };
+
   // Update notes/location
   const updateImageField = (
     index: number, 
@@ -895,7 +901,24 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     value: string | number
   ) => {
     setProcessedImages((prev) =>
-      prev.map((img, i) => (i === index ? { ...img, [field]: value } : img))
+      prev.map((img, i) => {
+        if (i !== index) return img;
+        let updatedExtracted = img.extractedData ? { ...img.extractedData } : undefined;
+
+        if (field === "notes" && updatedExtracted) {
+          updatedExtracted.notes = String(value);
+        }
+        if (field === "status" && updatedExtracted) {
+          updatedExtracted.isSealed = value === "sealed";
+        }
+        if (field === "remainingPercentage" && updatedExtracted) {
+          updatedExtracted.remainingPercentage = Number(value);
+        }
+
+        const updated = { ...img, [field]: value, extractedData: updatedExtracted };
+        schedulePendingUploadSave(updated.pendingUploadId, updated.extractedData);
+        return updated;
+      })
     );
   };
 
@@ -1047,10 +1070,12 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             updatedData.bedTemp = defaults.bedTemp;
           }
           
-          return {
+          const updated = {
             ...img,
             extractedData: updatedData,
           };
+          schedulePendingUploadSave(updated.pendingUploadId, updated.extractedData);
+          return updated;
         }
         return img;
       })
