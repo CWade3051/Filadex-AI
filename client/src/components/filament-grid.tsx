@@ -75,14 +75,14 @@ export function FilamentGrid({
 
   return (
     <section className="lg:w-4/4">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-medium text-neutral-400">{t('filaments.inventory')}</h2>
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center sm:space-x-3">
           <Select
             value={sortOrder}
             onValueChange={(value) => setSortOrder(value as SortOption)}
           >
-            <SelectTrigger className="border border-neutral-200 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary text-neutral-400 w-[200px]">
+            <SelectTrigger className="border border-neutral-200 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary text-neutral-400 w-full sm:w-[200px]">
               <SelectValue placeholder={t('filters.sortBy')} />
             </SelectTrigger>
             <SelectContent>
@@ -93,7 +93,7 @@ export function FilamentGrid({
             </SelectContent>
           </Select>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center sm:space-x-2">
             {/* Selection Mode Toggle */}
             {onSelectFilament && onSelectAll && (
               <Button
@@ -103,7 +103,7 @@ export function FilamentGrid({
                 className={`${selectable
                   ? 'bg-primary text-white hover:bg-primary/90'
                   : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700'
-                } flex items-center gap-1 mr-1`}
+                } flex items-center gap-1 mr-1 w-full sm:w-auto`}
               >
                 {selectable ? (
                   <CheckSquare className="h-4 w-4 mr-1" />
@@ -114,7 +114,7 @@ export function FilamentGrid({
               </Button>
             )}
 
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 self-end sm:self-auto">
               <button
                 className={`p-1.5 rounded-md hover:bg-neutral-200 ${viewMode === "grid" ? "bg-neutral-200" : ""}`}
                 onClick={() => setViewMode("grid")}
