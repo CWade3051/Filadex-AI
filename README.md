@@ -8,7 +8,7 @@ Filadex-AI is an enhanced fork of the open-source Filadex filament management sy
 
 **Just want to get started fast?** Use the one‑command Docker quickstart: see `quickstart-docker.md`.
 
-> **Fork of:** [Original Filadex](https://github.com/the-luddite/filadex)
+> **Fork of:** [Original Filadex](https://github.com/the-luap/filadex) by Paul Nothaft
 > **AI Features by:** Charles Wade
 
 ## 🆕 AI-Powered Features
