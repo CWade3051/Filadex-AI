@@ -4,9 +4,12 @@
   <img src="screenshots/logo-filadex.png" alt="Filadex Logo" width="240">
 </div>
 
-Filadex-AI is an enhanced fork of the open-source Filadex filament management system, featuring **AI-powered photo import** capabilities. Upload photos of your filament spools and let AI automatically extract manufacturer, material, color, print settings, and more. This project demonstrates the power of AI-assisted development and AI-powered features for practical applications.
+## 🚀 Quick Start (Recommended)
+Want the fastest, simplest setup? Start here: **`quickstart-docker.md`**.
+- macOS/Linux: `./quickstart-docker.sh`
+- Windows (PowerShell): `.\quickstart-docker.ps1`
 
-**Just want to get started fast?** Use the one‑command Docker quickstart: see `quickstart-docker.md`.
+Filadex-AI is an enhanced fork of the open-source Filadex filament management system, featuring **AI-powered photo import** capabilities. Upload photos of your filament spools and let AI automatically extract manufacturer, material, color, print settings, and more. This project demonstrates the power of AI-assisted development and AI-powered features for practical applications.
 
 > **Fork of:** [Original Filadex](https://github.com/the-luap/filadex) by Paul Nothaft
 > **AI Features by:** Charles Wade
@@ -40,6 +43,22 @@ Filadex-AI is an enhanced fork of the open-source Filadex filament management sy
 - `./scripts/reset-docker.sh` - Reset Docker environment (destructive)
 - `./scripts/backup.sh` / `./scripts/backup-docker.sh` - Backup data
 - `./scripts/restore.sh` / `./scripts/restore-docker.sh` - Restore from backup
+
+## 📚 Documentation Index
+- `quickstart-docker.md` - One-command Docker setup (recommended for new users).
+- `docs/DEVELOPMENT.md` - Local development setup and workflow.
+- `docs/API.md` - API endpoints and usage.
+- `docs/TESTING_GUIDE.md` - Testing setup and commands.
+- `docs/TRANSLATION_GUIDE.md` - Localization/i18n guidance.
+- `scripts/SCRIPTS.md` - Overview of helper scripts.
+- `resources/README.md` - Resources and assets notes.
+- `CONTRIBUTING.md` - How to contribute.
+- `CODE_OF_CONDUCT.md` - Community conduct guidelines.
+- `SECURITY.md` - Security policy and vulnerability reporting.
+- `TODO.md` - Roadmap and task list.
+- `docker-hub-description.md` - Docker Hub listing text.
+- `codex.md` - Project notes for Codex/AI-assisted development.
+- `.github/PULL_REQUEST_TEMPLATE.md` - Pull request template.
 
 ## 📸 Screenshots
 
