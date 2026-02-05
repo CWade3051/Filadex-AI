@@ -1203,7 +1203,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto sm:overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] sm:max-h-[90vh] overflow-y-auto sm:overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5" />
@@ -1225,7 +1225,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             </Button>
           </div>
         ) : (
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col overflow-hidden min-h-0">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex flex-col overflow-visible sm:flex-1 sm:overflow-hidden sm:min-h-0">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="upload">
                 <Upload className="h-4 w-4 mr-2" />
@@ -1249,19 +1249,34 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             </TabsList>
 
             {/* Upload Tab */}
-            <TabsContent value="upload" className="flex-1 flex flex-col overflow-hidden mt-4">
+            <TabsContent value="upload" className="flex-1 flex flex-col overflow-visible sm:overflow-hidden mt-4">
               <div
                 {...getRootProps()}
                 className={`
-                  border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
+                  border-2 border-dashed rounded-lg p-6 sm:p-8 text-center cursor-pointer transition-colors
+                  min-h-[180px] sm:min-h-[240px] flex flex-col items-center justify-center gap-3
                   ${isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"}
                 `}
               >
                 <input {...getInputProps()} />
-                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-lg font-medium mb-2">{t("ai.dragDropPhotos")}</p>
-                <p className="text-sm text-muted-foreground">{t("ai.supportedFormats")}</p>
-                <p className="text-sm text-muted-foreground">{t("ai.maxFileSize")}</p>
+                <div className="flex flex-col items-center gap-3 sm:hidden">
+                  <Upload className="h-10 w-10 text-muted-foreground flex-shrink-0" />
+                  <Button type="button" variant="secondary" className="w-full max-w-[220px]">
+                    {t("ai.selectPhotos")}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center px-2">
+                    {t("ai.supportedFormats")} · {t("ai.maxFileSize")}
+                  </p>
+                </div>
+                <div className="hidden sm:flex flex-col items-center gap-2">
+                  <Upload className="h-12 w-12 text-muted-foreground" />
+                  <p className="text-lg font-semibold leading-snug text-center px-2 max-w-[28rem] text-foreground">
+                    {t("ai.dragDropPhotos")}
+                  </p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    {t("ai.supportedFormats")} · {t("ai.maxFileSize")}
+                  </p>
+                </div>
               </div>
 
               {selectedFiles.length > 0 && (
@@ -1427,7 +1442,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             </TabsContent>
 
             {/* Review Tab */}
-            <TabsContent value="review" className="flex-1 flex flex-col mt-4 h-full overflow-visible sm:overflow-hidden">
+            <TabsContent value="review" className="flex flex-col mt-4 overflow-visible sm:flex-1 sm:h-full sm:overflow-hidden">
               {/* Show progress bar when processing */}
               {hasQueueProcessing && (pendingUploadsPendingCount > 0 || (pendingUploadsTotalCount > 0 && pendingUploadsProcessedCount < pendingUploadsTotalCount)) && (
                 <div className="mb-4 p-3 bg-primary/10 rounded-lg shrink-0">
@@ -1460,11 +1475,11 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
               {/* Bulk storage location selector */}
               {processedImages.length > 0 && (
                 <div className="flex flex-col gap-3 mb-4 p-3 bg-muted/50 rounded-lg shrink-0 sm:flex-row sm:items-center sm:gap-4">
-                  <div className="flex flex-col gap-2 flex-1 sm:flex-row sm:items-center">
-                    <Label className="text-sm font-medium whitespace-nowrap">
+                  <div className="flex flex-col gap-2 flex-1 sm:flex-row sm:items-center sm:gap-3">
+                    <Label className="text-sm font-medium whitespace-nowrap shrink-0">
                       {t("ai.setLocationForAll") || "Set location for all:"}
                     </Label>
-                    <div className="flex-1 max-w-xs">
+                    <div className="w-full sm:w-64 sm:min-w-[200px]">
                       <Combobox
                         options={storageLocationOptions}
                         value=""
@@ -1489,7 +1504,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                           storageLocation: ""
                         })));
                       }}
-                      className="text-muted-foreground"
+                      className="text-muted-foreground whitespace-nowrap shrink-0"
                     >
                       {t("ai.clearLocations") || "Clear"}
                     </Button>
@@ -1498,10 +1513,10 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
               )}
               
               <div className="flex flex-col gap-3 mb-4 shrink-0 sm:flex-row sm:items-center sm:justify-between">
-                <span className="text-sm">
+                <span className="text-sm whitespace-nowrap">
                   {selectedCount} of {processedImages.length} selected for import
                 </span>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap sm:justify-end sm:gap-2">
                   {processedImages.length > 0 && (
                     <>
                       <Button
@@ -1515,7 +1530,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                             }))
                           );
                         }}
-                        className="w-full sm:w-auto"
+                        className="w-full sm:w-auto whitespace-nowrap"
                       >
                         {t("ai.selectAll") || "Select All"}
                       </Button>
@@ -1530,7 +1545,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                             }))
                           );
                         }}
-                        className="w-full sm:w-auto"
+                        className="w-full sm:w-auto whitespace-nowrap"
                       >
                         {t("ai.deselectAll") || "Deselect All"}
                       </Button>
@@ -1542,7 +1557,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                             resetReviewState();
                           }
                         }}
-                        className="text-red-500 hover:text-red-700 w-full sm:w-auto"
+                        className="text-red-500 hover:text-red-700 w-full sm:w-auto whitespace-nowrap"
                       >
                         <Trash2 className="h-4 w-4 mr-1" />
                         {t("ai.clearAll") || "Clear All"}
@@ -1552,7 +1567,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                   <Button
                     onClick={handleImport}
                     disabled={selectedCount === 0 || importFilamentsMutation.isPending}
-                    className="w-full sm:w-auto"
+                    className="w-full sm:w-auto whitespace-nowrap"
                   >
                     {importFilamentsMutation.isPending ? (
                       <>
@@ -1569,8 +1584,8 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 </div>
               </div>
 
-              <div className="flex-1 overflow-visible sm:overflow-auto max-h-none sm:max-h-[calc(90vh-220px)]">
-                <div className="space-y-4 pr-4 pb-4">
+              <div className="flex-1 overflow-visible sm:overflow-auto max-h-none sm:max-h-[calc(90vh-280px)]">
+                <div className="space-y-4 sm:pr-2 pb-4">
                   {processedImages.length === 0 && isProcessing && (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
                       <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
