@@ -1,10 +1,12 @@
 # Filadex-AI - 3D Printing Filament Management System
 
 <div align="center">
-  <img src="public/logo.svg" alt="Filadex Logo" width="200" height="200" style="color: #4f46e5;">
+  <img src="screenshots/logo-filadex.png" alt="Filadex Logo" width="240">
 </div>
 
 Filadex-AI is an enhanced fork of the open-source Filadex filament management system, featuring **AI-powered photo import** capabilities. Upload photos of your filament spools and let AI automatically extract manufacturer, material, color, print settings, and more. This project demonstrates the power of AI-assisted development and AI-powered features for practical applications.
+
+**Just want to get started fast?** Use the one‑command Docker quickstart: see `quickstart-docker.md`.
 
 > **Fork of:** [Original Filadex](https://github.com/the-luddite/filadex)
 > **AI Features by:** Charles Wade
@@ -41,18 +43,40 @@ Filadex-AI is an enhanced fork of the open-source Filadex filament management sy
 
 ## 📸 Screenshots
 
-<div align="center">
-  <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
-    <div style="flex: 1; min-width: 300px;">
-      <p><strong>Light Mode</strong></p>
-      <img src="screenshot-white.png" alt="Filadex Light Mode" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-    </div>
-    <div style="flex: 1; min-width: 300px;">
-      <p><strong>Dark Mode</strong></p>
-      <img src="screenshot-black.png" alt="Filadex Dark Mode" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-    </div>
-  </div>
-</div>
+### Desktop Highlights
+**Dashboard Overview**  
+<img src="screenshots/desktop-dashboard-overview.png" alt="Desktop dashboard overview" width="900">
+
+**Import from Photos (Review Results)**  
+<img src="screenshots/desktop-photo-import-review.png" alt="AI photo import review results" width="900">
+
+**Cloud Backup**  
+<img src="screenshots/desktop-cloud-backup.png" alt="Cloud backup tools" width="900">
+
+**Slicer Profiles**  
+<img src="screenshots/desktop-slicer-profiles.png" alt="Slicer profiles manager" width="900">
+
+**Print History**  
+<img src="screenshots/desktop-print-history.png" alt="Print history log" width="900">
+
+### Mobile Highlights
+**Home Overview**  
+<img src="screenshots/mobile-home-overview.png" alt="Mobile home overview" width="300">
+
+**Import from Photos (Upload)**  
+<img src="screenshots/mobile-photo-import-upload.png" alt="Mobile photo import upload" width="300">
+
+**Photo Upload (Selection)**  
+<img src="screenshots/mobile-photo-upload-selection.png" alt="Mobile photo selection" width="300">
+
+**Statistics**  
+<img src="screenshots/mobile-statistics.png" alt="Mobile stats" width="300">
+
+**Material Compatibility Matrix**  
+<img src="screenshots/mobile-material-compatibility.png" alt="Mobile material compatibility" width="300">
+
+**Print History**  
+<img src="screenshots/mobile-print-history.png" alt="Mobile print history" width="300">
 
 ## 🌟 Features
 

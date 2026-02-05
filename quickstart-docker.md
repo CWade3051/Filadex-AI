@@ -1,5 +1,23 @@
 # Quickstart (Production Docker)
 
+## One-Command Setup (Recommended)
+If you just want it to work and don’t want to learn Docker yet, use the helper script. It checks for Docker, installs it if you want, asks a few questions, and starts the app.
+
+### macOS / Linux
+```bash
+chmod +x quickstart-docker.sh
+./quickstart-docker.sh
+```
+
+### Windows (PowerShell)
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\quickstart-docker.ps1
+```
+
+These scripts can run from the repo root, or if you run them elsewhere they will offer to clone the repo for you.
+If Docker Desktop or Git is missing, they will offer to install it (or open the download page) and then continue.
+
 This guide gets Filadex running quickly using the production Docker setup.
 
 ## Prerequisites

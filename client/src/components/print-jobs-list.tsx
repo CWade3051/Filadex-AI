@@ -190,7 +190,7 @@ export function PrintJobsList({ open, onClose }: PrintJobsListProps) {
   return (
     <>
       <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-        <DialogContent className="max-w-5xl max-h-[90vh]">
+        <DialogContent className="w-[95vw] max-h-[90vh] sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Printer className="h-5 w-5" />
@@ -212,51 +212,55 @@ export function PrintJobsList({ open, onClose }: PrintJobsListProps) {
                 <p>{t("printJobs.noPrintJobs")}</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">{t("printJobs.status")}</TableHead>
-                    <TableHead>{t("printJobs.name")}</TableHead>
-                    <TableHead>{t("printJobs.printer")}</TableHead>
-                    <TableHead>{t("printJobs.filamentUsed")}</TableHead>
-                    <TableHead className="text-right">
-                      <Scale className="h-4 w-4 inline-block mr-1" />
-                      {t("printJobs.weight")}
-                    </TableHead>
-                    <TableHead>
-                      <Clock className="h-4 w-4 inline-block mr-1" />
-                      {t("printJobs.duration")}
-                    </TableHead>
-                    <TableHead>
-                      <Calendar className="h-4 w-4 inline-block mr-1" />
-                      {t("printJobs.date")}
-                    </TableHead>
-                    <TableHead className="text-right">{t("common.actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-3 md:hidden">
                   {sortedJobs.map((job) => {
                     const totalGrams = getTotalGrams(job);
                     return (
-                      <TableRow key={job.id}>
-                        <TableCell>
-                          {getStatusIcon(job.status)}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          <div className="flex flex-col">
-                            <span>{job.name}</span>
-                            {job.slicerUsed && (
-                              <span className="text-xs text-muted-foreground">
-                                via {job.slicerUsed}
-                              </span>
-                            )}
+                      <div key={job.id} className="rounded-lg border p-3 bg-background/40">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 min-w-0">
+                            {getStatusIcon(job.status)}
+                            <div className="min-w-0">
+                              <div className="font-medium truncate">{job.name}</div>
+                              {job.slicerUsed && (
+                                <div className="text-xs text-muted-foreground">
+                                  via {job.slicerUsed}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </TableCell>
-                        <TableCell>{job.printerUsed || "-"}</TableCell>
-                        <TableCell className="max-w-[200px] truncate" title={getFilamentNames(job)}>
+                          {getStatusBadge(job.status)}
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <div className="text-muted-foreground">{t("printJobs.printer")}</div>
+                            <div className="mt-0.5">{job.printerUsed || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground">{t("printJobs.weight")}</div>
+                            <div className="mt-0.5">
+                              {totalGrams ? `${totalGrams}g` : job.estimatedWeight ? `~${job.estimatedWeight}g` : "-"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground">{t("printJobs.duration")}</div>
+                            <div className="mt-0.5">{formatDuration(job.actualDuration || job.estimatedDuration)}</div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground">{t("printJobs.date")}</div>
+                            <div className="mt-0.5">{formatDate(job.printCompletedAt || job.createdAt)}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 text-xs text-muted-foreground">
+                          {t("printJobs.filamentUsed")}
+                        </div>
+                        <div className="mt-1">
                           {job.parsedFilamentUsages && job.parsedFilamentUsages.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {job.parsedFilamentUsages.slice(0, 2).map((usage, idx) => {
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              {job.parsedFilamentUsages.slice(0, 3).map((usage, idx) => {
                                 const filament = filaments.find((f) => f.id === usage.filamentId);
                                 return (
                                   <div key={idx} className="flex items-center gap-1">
@@ -266,52 +270,137 @@ export function PrintJobsList({ open, onClose }: PrintJobsListProps) {
                                         style={{ backgroundColor: filament.colorCode || "#ccc" }}
                                       />
                                     )}
-                                    <span className="text-xs">{usage.gramsUsed}g</span>
+                                    <span>{usage.gramsUsed}g</span>
                                   </div>
                                 );
                               })}
-                              {job.parsedFilamentUsages.length > 2 && (
+                              {job.parsedFilamentUsages.length > 3 && (
                                 <span className="text-xs text-muted-foreground">
-                                  +{job.parsedFilamentUsages.length - 2} more
+                                  +{job.parsedFilamentUsages.length - 3} more
                                 </span>
                               )}
                             </div>
                           ) : (
-                            "-"
+                            <div className="text-xs">-</div>
                           )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {totalGrams ? `${totalGrams}g` : job.estimatedWeight ? `~${job.estimatedWeight}g` : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {formatDuration(job.actualDuration || job.estimatedDuration)}
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(job.printCompletedAt || job.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(job)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(job.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+
+                        <div className="mt-3 flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(job)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(job.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </div>
+
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[50px]">{t("printJobs.status")}</TableHead>
+                        <TableHead>{t("printJobs.name")}</TableHead>
+                        <TableHead>{t("printJobs.printer")}</TableHead>
+                        <TableHead>{t("printJobs.filamentUsed")}</TableHead>
+                        <TableHead className="text-right">
+                          <Scale className="h-4 w-4 inline-block mr-1" />
+                          {t("printJobs.weight")}
+                        </TableHead>
+                        <TableHead>
+                          <Clock className="h-4 w-4 inline-block mr-1" />
+                          {t("printJobs.duration")}
+                        </TableHead>
+                        <TableHead>
+                          <Calendar className="h-4 w-4 inline-block mr-1" />
+                          {t("printJobs.date")}
+                        </TableHead>
+                        <TableHead className="text-right">{t("common.actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sortedJobs.map((job) => {
+                        const totalGrams = getTotalGrams(job);
+                        return (
+                          <TableRow key={job.id}>
+                            <TableCell>
+                              {getStatusIcon(job.status)}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex flex-col">
+                                <span>{job.name}</span>
+                                {job.slicerUsed && (
+                                  <span className="text-xs text-muted-foreground">
+                                    via {job.slicerUsed}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{job.printerUsed || "-"}</TableCell>
+                            <TableCell className="max-w-[200px] truncate" title={getFilamentNames(job)}>
+                              {job.parsedFilamentUsages && job.parsedFilamentUsages.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {job.parsedFilamentUsages.slice(0, 2).map((usage, idx) => {
+                                    const filament = filaments.find((f) => f.id === usage.filamentId);
+                                    return (
+                                      <div key={idx} className="flex items-center gap-1">
+                                        {filament && (
+                                          <span
+                                            className="w-3 h-3 rounded-full border"
+                                            style={{ backgroundColor: filament.colorCode || "#ccc" }}
+                                          />
+                                        )}
+                                        <span className="text-xs">{usage.gramsUsed}g</span>
+                                      </div>
+                                    );
+                                  })}
+                                  {job.parsedFilamentUsages.length > 2 && (
+                                    <span className="text-xs text-muted-foreground">
+                                      +{job.parsedFilamentUsages.length - 2} more
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {totalGrams ? `${totalGrams}g` : job.estimatedWeight ? `~${job.estimatedWeight}g` : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {formatDuration(job.actualDuration || job.estimatedDuration)}
+                            </TableCell>
+                            <TableCell>
+                              {formatDate(job.printCompletedAt || job.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEdit(job)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDelete(job.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </ScrollArea>
 
