@@ -595,7 +595,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col">
+      <DialogContent className="w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="h-5 w-5" />
@@ -610,17 +610,17 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
           {/* Actions bar */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-1 sm:min-w-0">
-              <div className="relative w-full sm:flex-1 sm:max-w-xs">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-[400px]">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search profiles..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8"
+                  className="pl-9"
                 />
               </div>
               <Select value={filterManufacturer} onValueChange={setFilterManufacturer}>
-                <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectTrigger className="w-full sm:w-[160px]">
                   <SelectValue placeholder="Manufacturer" />
                 </SelectTrigger>
                 <SelectContent>
@@ -633,7 +633,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                 </SelectContent>
               </Select>
               <Select value={filterMaterial} onValueChange={setFilterMaterial}>
-                <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectTrigger className="w-full sm:w-[160px]">
                   <SelectValue placeholder="Material" />
                 </SelectTrigger>
                 <SelectContent>
@@ -652,7 +652,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                 setShowUploadForm(true);
               }}
               size="sm"
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto shrink-0"
             >
               <Plus className="h-4 w-4 mr-1" />
               Upload Profile
@@ -663,10 +663,11 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
           {showUploadForm && (
             <Card className="border-dashed">
               <CardHeader className="py-3">
-                <CardTitle className="text-base">Upload New Profile</CardTitle>
+                <CardTitle className="text-base">{isEditing ? "Edit Profile" : "Upload New Profile"}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* First row: File and Name */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Profile File {isEditing ? "" : "*"}</Label>
                     <Input
@@ -680,7 +681,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                     <p className="text-xs text-muted-foreground">
                       {isEditing
                         ? "File replacement is not supported yet."
-                        : "Supported: .json, .ini, .cfg, .3mf, .curaprofile, .fff, .xml, .zip. You can select multiple files."}
+                        : "Supported: .json, .ini, .cfg, .3mf, .curaprofile, .fff, .xml, .zip"}
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -699,7 +700,8 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Second row: Manufacturer, Material, Printer, Slicer */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
                   <div className="space-y-2">
                     <Label>Manufacturer</Label>
                     <Select
@@ -708,7 +710,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                       disabled={isBulkUpload}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select manufacturer" />
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
@@ -728,7 +730,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                       disabled={isBulkUpload}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select material" />
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
@@ -740,9 +742,6 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Printer Model</Label>
                     <Select
@@ -751,7 +750,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                       disabled={isBulkUpload}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select printer" />
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
@@ -771,7 +770,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                       disabled={isBulkUpload}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select slicer" />
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
@@ -785,6 +784,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                   </div>
                 </div>
 
+                {/* Third row: Notes full width */}
                 <div className="space-y-2">
                   <Label>Notes</Label>
                   <Textarea
@@ -796,104 +796,108 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Linked Filaments</Label>
-                  {isBulkUpload && (
-                    <p className="text-xs text-muted-foreground">
-                      Bulk upload skips filament linking. You can link profiles after upload.
-                    </p>
-                  )}
-                  {uploadFilamentIds.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {uploadFilamentIds.map((id) => {
-                        const filament = filaments.find((item) => item.id === id);
-                        if (!filament) return null;
-                        return (
-                          <Badge key={id} variant="secondary" className="flex items-center gap-1">
-                            <span className="max-w-[200px] truncate">
-                              {filament.name}
-                            </span>
-                            <button
-                              type="button"
-                              className="ml-1 text-muted-foreground hover:text-foreground"
-                              title="Remove filament"
-                              aria-label="Remove filament"
-                              onClick={() =>
-                                setUploadFilamentIds((prev) => prev.filter((item) => item !== id))
-                              }
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        );
-                      })}
+                {/* Fourth row: Linked Filaments and actions */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Linked Filaments</Label>
+                    {isBulkUpload && (
+                      <p className="text-xs text-muted-foreground">
+                        Bulk upload skips filament linking. You can link profiles after upload.
+                      </p>
+                    )}
+                    {uploadFilamentIds.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {uploadFilamentIds.map((id) => {
+                          const filament = filaments.find((item) => item.id === id);
+                          if (!filament) return null;
+                          return (
+                            <Badge key={id} variant="secondary" className="flex items-center gap-1">
+                              <span className="max-w-[200px] truncate">
+                                {filament.name}
+                              </span>
+                              <button
+                                type="button"
+                                className="ml-1 text-muted-foreground hover:text-foreground"
+                                title="Remove filament"
+                                aria-label="Remove filament"
+                                onClick={() =>
+                                  setUploadFilamentIds((prev) => prev.filter((item) => item !== id))
+                                }
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <Select
+                      value={filamentPickerValue}
+                      onValueChange={(value) => {
+                        setFilamentPickerValue(value);
+                        if (value === "select") return;
+                        const id = parseInt(value, 10);
+                        if (!isNaN(id)) {
+                          setUploadFilamentIds((prev) =>
+                            prev.includes(id) ? prev : [...prev, id]
+                          );
+                        }
+                        setFilamentPickerValue("select");
+                      }}
+                      disabled={isBulkUpload}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Add filament" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="select">Add filament</SelectItem>
+                        {availableFilaments.map((filament) => (
+                          <SelectItem key={filament.id} value={String(filament.id)}>
+                            {filament.name}
+                            {filament.manufacturer ? ` • ${filament.manufacturer}` : ""}
+                            {filament.material ? ` • ${filament.material}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-col justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={uploadIsPublic} onCheckedChange={setUploadIsPublic} />
+                      <Label className="flex items-center gap-1">
+                        {uploadIsPublic ? (
+                          <>
+                            <Globe className="h-4 w-4" /> Public (visible to all users)
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-4 w-4" /> Private (only you can see)
+                          </>
+                        )}
+                      </Label>
                     </div>
-                  )}
-                  <Select
-                    value={filamentPickerValue}
-                    onValueChange={(value) => {
-                      setFilamentPickerValue(value);
-                      if (value === "select") return;
-                      const id = parseInt(value, 10);
-                      if (!isNaN(id)) {
-                        setUploadFilamentIds((prev) =>
-                          prev.includes(id) ? prev : [...prev, id]
-                        );
-                      }
-                      setFilamentPickerValue("select");
-                    }}
-                    disabled={isBulkUpload}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Add filament" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="select">Add filament</SelectItem>
-                      {availableFilaments.map((filament) => (
-                        <SelectItem key={filament.id} value={String(filament.id)}>
-                          {filament.name}
-                          {filament.manufacturer ? ` • ${filament.manufacturer}` : ""}
-                          {filament.material ? ` • ${filament.material}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <Switch checked={uploadIsPublic} onCheckedChange={setUploadIsPublic} />
-                  <Label className="flex items-center gap-1">
-                    {uploadIsPublic ? (
-                      <>
-                        <Globe className="h-4 w-4" /> Public (visible to all users)
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="h-4 w-4" /> Private (only you can see)
-                      </>
-                    )}
-                  </Label>
-                </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                  <Button variant="outline" onClick={resetUploadForm} className="w-full sm:w-auto">
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSaveProfile}
-                    disabled={uploadMutation.isPending || updateMutation.isPending}
-                    className="w-full sm:w-auto"
-                  >
-                    {(uploadMutation.isPending || updateMutation.isPending) && (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    )}
-                    <Upload className="h-4 w-4 mr-1" />
-                    {isEditing
-                      ? "Save"
-                      : isBulkUpload
-                        ? `Upload ${selectedFiles.length}`
-                        : "Upload"}
-                  </Button>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={resetUploadForm}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSaveProfile}
+                        disabled={uploadMutation.isPending || updateMutation.isPending}
+                      >
+                        {(uploadMutation.isPending || updateMutation.isPending) && (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        )}
+                        <Upload className="h-4 w-4 mr-1" />
+                        {isEditing
+                          ? "Save"
+                          : isBulkUpload
+                            ? `Upload ${selectedFiles.length}`
+                            : "Upload"}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -912,101 +916,106 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                   : "No profiles match your filters."}
               </div>
             ) : (
-              <div className="space-y-3 pr-2 sm:pr-4">
+              <div className="grid gap-3 pr-2 sm:pr-4 md:grid-cols-2 xl:grid-cols-3">
                 {filteredProfiles.map((profile) => {
                   const settings = getParsedSettings(profile);
                   return (
                     <Card key={profile.id} className="hover:bg-accent/50 transition-colors">
                       <CardContent className="py-3 px-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                               {getFileIcon(profile.fileType)}
-                              <span className="font-medium">{profile.name}</span>
-                              <Badge variant={profile.isPublic ? "default" : "secondary"}>
-                                {profile.isPublic ? (
-                                  <>
-                                    <Globe className="h-3 w-3 mr-1" /> Public
-                                  </>
-                                ) : (
-                                  <>
-                                    <Lock className="h-3 w-3 mr-1" /> Private
-                                  </>
-                                )}
-                              </Badge>
-                              {profile.fileType && (
-                                <Badge variant="outline">{profile.fileType}</Badge>
-                              )}
+                              <span className="font-medium truncate">{profile.name}</span>
                             </div>
-
-                            <div className="flex flex-wrap gap-2 mt-1 text-sm text-muted-foreground">
-                              {profile.manufacturer && <span>Brand: {profile.manufacturer}</span>}
-                              {profile.material && <span>• Material: {profile.material}</span>}
-                              {profile.printerModel && <span>• Printer: {profile.printerModel}</span>}
-                              {profile.slicerVersion && (
-                                <span>• Slicer: {profile.slicerVersion}</span>
-                              )}
-                            </div>
-
-                            {settings && !settings.parseError && (
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                {settings.layerHeight && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Layer: {settings.layerHeight}mm
-                                  </Badge>
-                                )}
-                                {settings.printSpeed && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Speed: {settings.printSpeed}mm/s
-                                  </Badge>
-                                )}
-                                {settings.infillDensity && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Infill: {settings.infillDensity}%
-                                  </Badge>
-                                )}
-                                {settings.temperature && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Temp: {settings.temperature}°C
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-
-                            {profile.notes && (
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                                {profile.notes}
-                              </p>
-                            )}
-                          </div>
-
-                            <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDownload(profile)}
-                              title="Download"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
+                            <div className="flex gap-1 shrink-0">
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleDownload(profile)}
+                                title="Download"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
                                 onClick={() => startEditProfile(profile)}
                                 title="Edit"
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteMutation.mutate(profile.id)}
-                              disabled={deleteMutation.isPending}
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => deleteMutation.mutate(profile.id)}
+                                disabled={deleteMutation.isPending}
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
                           </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge variant={profile.isPublic ? "default" : "secondary"} className="text-xs">
+                              {profile.isPublic ? (
+                                <>
+                                  <Globe className="h-3 w-3 mr-1" /> Public
+                                </>
+                              ) : (
+                                <>
+                                  <Lock className="h-3 w-3 mr-1" /> Private
+                                </>
+                              )}
+                            </Badge>
+                            {profile.fileType && (
+                              <Badge variant="outline" className="text-xs">{profile.fileType}</Badge>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                            {profile.manufacturer && <span>Brand: {profile.manufacturer}</span>}
+                            {profile.material && <span>• Material: {profile.material}</span>}
+                            {profile.printerModel && <span>• Printer: {profile.printerModel}</span>}
+                            {profile.slicerVersion && (
+                              <span>• Slicer: {profile.slicerVersion}</span>
+                            )}
+                          </div>
+
+                          {settings && !settings.parseError && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {settings.layerHeight && (
+                                <Badge variant="outline" className="text-xs">
+                                  Layer: {settings.layerHeight}mm
+                                </Badge>
+                              )}
+                              {settings.printSpeed && (
+                                <Badge variant="outline" className="text-xs">
+                                  Speed: {settings.printSpeed}mm/s
+                                </Badge>
+                              )}
+                              {settings.infillDensity && (
+                                <Badge variant="outline" className="text-xs">
+                                  Infill: {settings.infillDensity}%
+                                </Badge>
+                              )}
+                              {settings.temperature && (
+                                <Badge variant="outline" className="text-xs">
+                                  Temp: {settings.temperature}°C
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+
+                          {profile.notes && (
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {profile.notes}
+                            </p>
+                          )}
                         </div>
                       </CardContent>
                     </Card>

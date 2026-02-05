@@ -1881,16 +1881,14 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
 
                                   {/* Last Drying Date - only show if opened */}
                                   {img.status === "opened" && (
-                                    <div className="min-w-0 overflow-hidden">
+                                    <div className="min-w-0">
                                       <Label className="text-xs text-muted-foreground">Last Dried</Label>
-                                      <div className="pr-2">
-                                        <Input
-                                          type="date"
-                                          value={img.lastDryingDate || ""}
-                                          onChange={(e) => updateImageField(index, "lastDryingDate", e.target.value)}
-                                          className="h-8 text-sm w-full"
-                                        />
-                                      </div>
+                                      <Input
+                                        type="date"
+                                        value={img.lastDryingDate || ""}
+                                        onChange={(e) => updateImageField(index, "lastDryingDate", e.target.value)}
+                                        className="h-8 text-sm w-full appearance-none [-webkit-appearance:none] overflow-hidden"
+                                      />
                                     </div>
                                   )}
                                 </div>
@@ -2237,16 +2235,14 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
 
                                     {/* Last Drying Date - only show if opened */}
                                     {img.status === "opened" && (
-                                      <div className="min-w-0 overflow-hidden">
+                                      <div className="min-w-0">
                                         <Label className="text-xs text-muted-foreground">Last Dried</Label>
-                                        <div className="pr-2">
-                                          <Input
-                                            type="date"
-                                            value={img.lastDryingDate || ""}
-                                            onChange={(e) => updateImageField(index, "lastDryingDate", e.target.value)}
-                                            className="h-8 text-sm w-full"
-                                          />
-                                        </div>
+                                        <Input
+                                          type="date"
+                                          value={img.lastDryingDate || ""}
+                                          onChange={(e) => updateImageField(index, "lastDryingDate", e.target.value)}
+                                          className="h-8 text-sm w-full appearance-none [-webkit-appearance:none] overflow-hidden"
+                                        />
                                       </div>
                                     )}
                                   </div>

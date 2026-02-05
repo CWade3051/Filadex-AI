@@ -534,7 +534,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col">
+      <DialogContent className="w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Cloud className="h-5 w-5" />
@@ -546,304 +546,310 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
         </DialogHeader>
 
         <div className="flex-1 space-y-6 pr-2 sm:pr-4">
-            {/* Local Backup & Restore */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <HardDrive className="h-4 w-4" />
-                  Local Backup
-                </CardTitle>
-                <CardDescription>Download or restore from a local backup file</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 sm:flex-row">
-                <Button onClick={handleDownloadLocal} variant="outline" className="w-full sm:w-auto">
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Backup
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".zip"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  aria-label="Upload backup file"
-                />
-                <Button 
-                  onClick={() => fileInputRef.current?.click()} 
-                  variant="outline"
-                  disabled={restoreMutation.isPending}
-                  className="w-full sm:w-auto"
-                >
-                  {restoreMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <FolderUp className="h-4 w-4 mr-2" />
-                  )}
-                  Restore from File
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Admin Full Backup (only visible to admins) */}
-            {isAdmin && (
-              <Card className="border-amber-500/50">
+            {/* Local Backup & Admin Backup - Side by side on desktop */}
+            <div className={`grid gap-4 ${isAdmin ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+              {/* Local Backup & Restore */}
+              <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-amber-500" />
-                    Admin Full Backup
+                    <HardDrive className="h-4 w-4" />
+                    Local Backup
                   </CardTitle>
-                  <CardDescription>
-                    Backup/restore ALL users' data. New users created with password "changeme"
-                  </CardDescription>
+                  <CardDescription>Download or restore from a local backup file</CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-2 sm:flex-row">
-                  <Button onClick={handleDownloadAdminBackup} variant="outline" className="w-full sm:w-auto">
+                <CardContent className="flex flex-col gap-2">
+                  <Button onClick={handleDownloadLocal} variant="outline" className="w-full">
                     <Download className="h-4 w-4 mr-2" />
-                    Download Full Backup
+                    Download Backup
                   </Button>
                   <input
-                    ref={adminFileInputRef}
+                    ref={fileInputRef}
                     type="file"
                     accept=".zip"
-                    onChange={handleAdminFileUpload}
+                    onChange={handleFileUpload}
                     className="hidden"
-                    aria-label="Upload admin backup file"
+                    aria-label="Upload backup file"
                   />
                   <Button 
-                    onClick={() => adminFileInputRef.current?.click()} 
+                    onClick={() => fileInputRef.current?.click()} 
                     variant="outline"
-                    disabled={adminRestoreMutation.isPending}
-                    className="w-full sm:w-auto"
+                    disabled={restoreMutation.isPending}
+                    className="w-full"
                   >
-                    {adminRestoreMutation.isPending ? (
+                    {restoreMutation.isPending ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     ) : (
                       <FolderUp className="h-4 w-4 mr-2" />
                     )}
-                    Restore Full Backup
+                    Restore from File
                   </Button>
                 </CardContent>
               </Card>
-            )}
 
-            {/* S3-Compatible Storage */}
-            <Card>
-              <Collapsible open={s3Open} onOpenChange={setS3Open}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Server className="h-4 w-4" />
-                      <div>
-                        <CardTitle className="text-base">S3-Compatible Storage</CardTitle>
-                        <CardDescription className="text-xs">AWS S3, Backblaze B2, Wasabi, MinIO</CardDescription>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {s3Config?.configured && (
-                        <>
-                          <Badge variant="default">
-                            <CheckCircle className="h-3 w-3 mr-1" /> Connected
-                          </Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => backupMutation.mutate("s3")}
-                            disabled={backupMutation.isPending}
-                          >
-                            {backupMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Upload className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </>
-                      )}
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <Settings className="h-4 w-4 mr-1" />
-                          <ChevronDown className={`h-4 w-4 transition-transform ${s3Open ? "rotate-180" : ""}`} />
-                        </Button>
-                      </CollapsibleTrigger>
-                    </div>
-                  </div>
-                  {s3Config?.configured && s3Config.lastBackup && (
-                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                      <Clock className="h-3 w-3" />
-                      Last backup: {formatDate(s3Config.lastBackup)}
-                    </div>
-                  )}
-                </CardHeader>
-                <CollapsibleContent>
-                  <CardContent className="space-y-3 pt-0">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs">Endpoint URL</Label>
-                        <Input
-                          placeholder="https://s3.amazonaws.com"
-                          value={s3Form.endpoint}
-                          onChange={(e) => setS3Form({ ...s3Form, endpoint: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Bucket Name</Label>
-                        <Input
-                          placeholder="my-bucket"
-                          value={s3Form.bucket}
-                          onChange={(e) => setS3Form({ ...s3Form, bucket: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Region (optional)</Label>
-                        <Input
-                          placeholder="us-east-1"
-                          value={s3Form.region}
-                          onChange={(e) => setS3Form({ ...s3Form, region: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Folder Path</Label>
-                        <Input
-                          placeholder="filadex-backups"
-                          value={s3Form.folderPath}
-                          onChange={(e) => setS3Form({ ...s3Form, folderPath: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Access Key ID</Label>
-                        <Input
-                          type="password"
-                          placeholder="AKIAIOSFODNN7EXAMPLE"
-                          value={s3Form.accessKeyId}
-                          onChange={(e) => setS3Form({ ...s3Form, accessKeyId: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Secret Access Key</Label>
-                        <Input
-                          type="password"
-                          placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                          value={s3Form.secretAccessKey}
-                          onChange={(e) => setS3Form({ ...s3Form, secretAccessKey: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      onClick={() => s3ConfigureMutation.mutate(s3Form)}
-                      disabled={s3ConfigureMutation.isPending || !s3Form.endpoint || !s3Form.bucket || !s3Form.accessKeyId || !s3Form.secretAccessKey}
+              {/* Admin Full Backup (only visible to admins) */}
+              {isAdmin && (
+                <Card className="border-amber-500/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-amber-500" />
+                      Admin Full Backup
+                    </CardTitle>
+                    <CardDescription>
+                      Backup/restore ALL users' data. New users created with password "changeme"
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-2">
+                    <Button onClick={handleDownloadAdminBackup} variant="outline" className="w-full">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Full Backup
+                    </Button>
+                    <input
+                      ref={adminFileInputRef}
+                      type="file"
+                      accept=".zip"
+                      onChange={handleAdminFileUpload}
+                      className="hidden"
+                      aria-label="Upload admin backup file"
+                    />
+                    <Button 
+                      onClick={() => adminFileInputRef.current?.click()} 
+                      variant="outline"
+                      disabled={adminRestoreMutation.isPending}
                       className="w-full"
                     >
-                      {s3ConfigureMutation.isPending ? (
+                      {adminRestoreMutation.isPending ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       ) : (
-                        <CheckCircle className="h-4 w-4 mr-2" />
+                        <FolderUp className="h-4 w-4 mr-2" />
                       )}
-                      Save S3 Configuration
+                      Restore Full Backup
                     </Button>
                   </CardContent>
-                </CollapsibleContent>
-              </Collapsible>
-            </Card>
+                </Card>
+              )}
+            </div>
 
-            {/* WebDAV Storage */}
-            <Card>
-              <Collapsible open={webdavOpen} onOpenChange={setWebdavOpen}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4" />
-                      <div>
-                        <CardTitle className="text-base">WebDAV Storage</CardTitle>
-                        <CardDescription className="text-xs">Nextcloud, ownCloud, Synology, etc.</CardDescription>
+            {/* S3 and WebDAV - Side by side on desktop */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* S3-Compatible Storage */}
+              <Card>
+                <Collapsible open={s3Open} onOpenChange={setS3Open}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Server className="h-4 w-4" />
+                        <div>
+                          <CardTitle className="text-base">S3-Compatible Storage</CardTitle>
+                          <CardDescription className="text-xs">AWS S3, Backblaze B2, Wasabi, MinIO</CardDescription>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {webdavConfig?.configured && (
-                        <>
-                          <Badge variant="default">
-                            <CheckCircle className="h-3 w-3 mr-1" /> Connected
-                          </Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => backupMutation.mutate("webdav")}
-                            disabled={backupMutation.isPending}
-                          >
-                            {backupMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Upload className="h-4 w-4" />
-                            )}
+                      <div className="flex items-center gap-2">
+                        {s3Config?.configured && (
+                          <>
+                            <Badge variant="default" className="hidden sm:flex">
+                              <CheckCircle className="h-3 w-3 mr-1" /> Connected
+                            </Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => backupMutation.mutate("s3")}
+                              disabled={backupMutation.isPending}
+                            >
+                              {backupMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </>
+                        )}
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <Settings className="h-4 w-4 mr-1" />
+                            <ChevronDown className={`h-4 w-4 transition-transform ${s3Open ? "rotate-180" : ""}`} />
                           </Button>
-                        </>
-                      )}
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <Settings className="h-4 w-4 mr-1" />
-                          <ChevronDown className={`h-4 w-4 transition-transform ${webdavOpen ? "rotate-180" : ""}`} />
-                        </Button>
-                      </CollapsibleTrigger>
-                    </div>
-                  </div>
-                  {webdavConfig?.configured && webdavConfig.lastBackup && (
-                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                      <Clock className="h-3 w-3" />
-                      Last backup: {formatDate(webdavConfig.lastBackup)}
-                    </div>
-                  )}
-                </CardHeader>
-                <CollapsibleContent>
-                  <CardContent className="space-y-3 pt-0">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <Label className="text-xs">WebDAV URL</Label>
-                        <Input
-                          placeholder="https://nextcloud.example.com/remote.php/dav/files/username/"
-                          value={webdavForm.url}
-                          onChange={(e) => setWebdavForm({ ...webdavForm, url: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Username</Label>
-                        <Input
-                          placeholder="username"
-                          value={webdavForm.username}
-                          onChange={(e) => setWebdavForm({ ...webdavForm, username: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Password / App Token</Label>
-                        <Input
-                          type="password"
-                          placeholder="password or app token"
-                          value={webdavForm.password}
-                          onChange={(e) => setWebdavForm({ ...webdavForm, password: e.target.value })}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs">Folder Path</Label>
-                        <Input
-                          placeholder="Filadex-Backups"
-                          value={webdavForm.folderPath}
-                          onChange={(e) => setWebdavForm({ ...webdavForm, folderPath: e.target.value })}
-                        />
+                        </CollapsibleTrigger>
                       </div>
                     </div>
-                    <Button
-                      onClick={() => webdavConfigureMutation.mutate(webdavForm)}
-                      disabled={webdavConfigureMutation.isPending || !webdavForm.url || !webdavForm.username || !webdavForm.password}
-                      className="w-full"
-                    >
-                      {webdavConfigureMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                      )}
-                      Save WebDAV Configuration
-                    </Button>
-                  </CardContent>
-                </CollapsibleContent>
-              </Collapsible>
-            </Card>
+                    {s3Config?.configured && s3Config.lastBackup && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <Clock className="h-3 w-3" />
+                        Last backup: {formatDate(s3Config.lastBackup)}
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-3 pt-0">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs">Endpoint URL</Label>
+                          <Input
+                            placeholder="https://s3.amazonaws.com"
+                            value={s3Form.endpoint}
+                            onChange={(e) => setS3Form({ ...s3Form, endpoint: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Bucket Name</Label>
+                          <Input
+                            placeholder="my-bucket"
+                            value={s3Form.bucket}
+                            onChange={(e) => setS3Form({ ...s3Form, bucket: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Region (optional)</Label>
+                          <Input
+                            placeholder="us-east-1"
+                            value={s3Form.region}
+                            onChange={(e) => setS3Form({ ...s3Form, region: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Folder Path</Label>
+                          <Input
+                            placeholder="filadex-backups"
+                            value={s3Form.folderPath}
+                            onChange={(e) => setS3Form({ ...s3Form, folderPath: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Access Key ID</Label>
+                          <Input
+                            type="password"
+                            placeholder="AKIAIOSFODNN7EXAMPLE"
+                            value={s3Form.accessKeyId}
+                            onChange={(e) => setS3Form({ ...s3Form, accessKeyId: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Secret Access Key</Label>
+                          <Input
+                            type="password"
+                            placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                            value={s3Form.secretAccessKey}
+                            onChange={(e) => setS3Form({ ...s3Form, secretAccessKey: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => s3ConfigureMutation.mutate(s3Form)}
+                        disabled={s3ConfigureMutation.isPending || !s3Form.endpoint || !s3Form.bucket || !s3Form.accessKeyId || !s3Form.secretAccessKey}
+                        className="w-full"
+                      >
+                        {s3ConfigureMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                        )}
+                        Save S3 Configuration
+                      </Button>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+
+              {/* WebDAV Storage */}
+              <Card>
+                <Collapsible open={webdavOpen} onOpenChange={setWebdavOpen}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-4 w-4" />
+                        <div>
+                          <CardTitle className="text-base">WebDAV Storage</CardTitle>
+                          <CardDescription className="text-xs">Nextcloud, ownCloud, Synology, etc.</CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {webdavConfig?.configured && (
+                          <>
+                            <Badge variant="default" className="hidden sm:flex">
+                              <CheckCircle className="h-3 w-3 mr-1" /> Connected
+                            </Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => backupMutation.mutate("webdav")}
+                              disabled={backupMutation.isPending}
+                            >
+                              {backupMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </>
+                        )}
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <Settings className="h-4 w-4 mr-1" />
+                            <ChevronDown className={`h-4 w-4 transition-transform ${webdavOpen ? "rotate-180" : ""}`} />
+                          </Button>
+                        </CollapsibleTrigger>
+                      </div>
+                    </div>
+                    {webdavConfig?.configured && webdavConfig.lastBackup && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <Clock className="h-3 w-3" />
+                        Last backup: {formatDate(webdavConfig.lastBackup)}
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-3 pt-0">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="sm:col-span-2">
+                          <Label className="text-xs">WebDAV URL</Label>
+                          <Input
+                            placeholder="https://nextcloud.example.com/remote.php/dav/files/username/"
+                            value={webdavForm.url}
+                            onChange={(e) => setWebdavForm({ ...webdavForm, url: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Username</Label>
+                          <Input
+                            placeholder="username"
+                            value={webdavForm.username}
+                            onChange={(e) => setWebdavForm({ ...webdavForm, username: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Password / App Token</Label>
+                          <Input
+                            type="password"
+                            placeholder="password or app token"
+                            value={webdavForm.password}
+                            onChange={(e) => setWebdavForm({ ...webdavForm, password: e.target.value })}
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <Label className="text-xs">Folder Path</Label>
+                          <Input
+                            placeholder="Filadex-Backups"
+                            value={webdavForm.folderPath}
+                            onChange={(e) => setWebdavForm({ ...webdavForm, folderPath: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => webdavConfigureMutation.mutate(webdavForm)}
+                        disabled={webdavConfigureMutation.isPending || !webdavForm.url || !webdavForm.username || !webdavForm.password}
+                        className="w-full"
+                      >
+                        {webdavConfigureMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                        )}
+                        Save WebDAV Configuration
+                      </Button>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            </div>
 
             {/* OAuth Cloud Providers */}
             <div className="space-y-4">
@@ -855,84 +861,86 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
                 </div>
               ) : (
                 <TooltipProvider>
-                  {OAUTH_PROVIDERS.map((provider) => {
-                    const providerStatus = status?.[provider.id as keyof ExtendedBackupStatus];
-                    const isOAuthAvailable = oauthAvailable?.[provider.id as keyof OAuthAvailability];
-                    const isConnected = providerStatus?.configured;
-                    const isEnabled = providerStatus?.enabled;
-                    const Icon = provider.icon;
+                  <div className="space-y-3">
+                    {OAUTH_PROVIDERS.map((provider) => {
+                      const providerStatus = status?.[provider.id as keyof ExtendedBackupStatus];
+                      const isOAuthAvailable = oauthAvailable?.[provider.id as keyof OAuthAvailability];
+                      const isConnected = providerStatus?.configured;
+                      const isEnabled = providerStatus?.enabled;
+                      const Icon = provider.icon;
 
-                    return (
-                      <Card key={provider.id} className="opacity-80">
-                        <CardContent className="pt-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <Icon />
-                              <div>
-                                <div className="font-medium flex items-center gap-2">
-                                  {provider.name}
-                                  {!isOAuthAvailable && !isConnected && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Badge variant="outline" className="text-xs cursor-help">
-                                          <Lock className="h-3 w-3 mr-1" />
-                                          Setup Required
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="max-w-xs">
-                                        <p className="font-medium mb-1">OAuth credentials not configured</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          Set {provider.id.toUpperCase()}_CLIENT_ID and {provider.id.toUpperCase()}_CLIENT_SECRET in your environment.
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
+                      return (
+                        <Card key={provider.id} className="opacity-80">
+                          <CardContent className="py-4 px-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <Icon />
+                                <div className="min-w-0">
+                                  <div className="font-medium flex items-center gap-2 flex-wrap">
+                                    {provider.name}
+                                    {!isOAuthAvailable && !isConnected && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge variant="outline" className="text-xs cursor-help">
+                                            <Lock className="h-3 w-3 mr-1" />
+                                            Setup Required
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                          <p className="font-medium mb-1">OAuth credentials not configured</p>
+                                          <p className="text-xs text-muted-foreground">
+                                            Set {provider.id.toUpperCase()}_CLIENT_ID and {provider.id.toUpperCase()}_CLIENT_SECRET in your environment.
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                  </div>
+                                  {isConnected && providerStatus?.lastBackup && (
+                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      Last: {formatDate(providerStatus.lastBackup)}
+                                    </div>
                                   )}
                                 </div>
-                                {isConnected && providerStatus?.lastBackup && (
-                                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    Last: {formatDate(providerStatus.lastBackup)}
-                                  </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {isConnected ? (
+                                  <>
+                                    <Badge variant={isEnabled ? "default" : "secondary"} className="text-xs">
+                                      {isEnabled ? <><CheckCircle className="h-3 w-3 mr-1" /> Active</> : <><XCircle className="h-3 w-3 mr-1" /> Paused</>}
+                                    </Badge>
+                                    <Switch checked={isEnabled} onCheckedChange={(checked) => toggleMutation.mutate({ provider: provider.id, enabled: checked })} />
+                                    <Button variant="outline" size="sm" onClick={() => backupMutation.mutate(provider.id)} disabled={backupMutation.isPending}>
+                                      {backupMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => disconnectMutation.mutate(provider.id)}>
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </>
+                                ) : isOAuthAvailable ? (
+                                  <Button variant="outline" size="sm" onClick={() => connectMutation.mutate(provider.id)} disabled={connectMutation.isPending}>
+                                    {connectMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ExternalLink className="h-4 w-4 mr-1" />}
+                                    Connect
+                                  </Button>
+                                ) : (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="outline" size="sm" disabled>
+                                        <Lock className="h-4 w-4 mr-1" />
+                                        Connect
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Configure OAuth credentials to enable</TooltipContent>
+                                  </Tooltip>
                                 )}
                               </div>
                             </div>
-
-                            <div className="flex items-center gap-2">
-                              {isConnected ? (
-                                <>
-                                  <Badge variant={isEnabled ? "default" : "secondary"}>
-                                    {isEnabled ? <><CheckCircle className="h-3 w-3 mr-1" /> Active</> : <><XCircle className="h-3 w-3 mr-1" /> Paused</>}
-                                  </Badge>
-                                  <Switch checked={isEnabled} onCheckedChange={(checked) => toggleMutation.mutate({ provider: provider.id, enabled: checked })} />
-                                  <Button variant="outline" size="sm" onClick={() => backupMutation.mutate(provider.id)} disabled={backupMutation.isPending}>
-                                    {backupMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                                  </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => disconnectMutation.mutate(provider.id)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </>
-                              ) : isOAuthAvailable ? (
-                                <Button variant="outline" size="sm" onClick={() => connectMutation.mutate(provider.id)} disabled={connectMutation.isPending}>
-                                  {connectMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ExternalLink className="h-4 w-4 mr-1" />}
-                                  Connect
-                                </Button>
-                              ) : (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button variant="outline" size="sm" disabled>
-                                      <Lock className="h-4 w-4 mr-1" />
-                                      Connect
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Configure OAuth credentials to enable</TooltipContent>
-                                </Tooltip>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
                 </TooltipProvider>
               )}
             </div>
@@ -941,9 +949,9 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
             {history.length > 0 && (
               <div className="space-y-3">
                 <h3 className="font-medium text-sm">Recent Backups</h3>
-                <div className="space-y-2">
-                  {history.slice(-5).reverse().map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-2 rounded border text-sm">
+                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                  {history.slice(-6).reverse().map((item) => (
+                    <div key={item.id} className="flex items-center justify-between p-3 rounded border text-sm">
                       <div className="flex items-center gap-2">
                         {item.status === "completed" ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
