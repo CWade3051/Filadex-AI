@@ -19,6 +19,8 @@ import {
   filamentSlicerProfiles,
   cloudBackupConfigs,
   backupHistory,
+  uploadSessions,
+  pendingUploads,
 } from "../../shared/schema";
 import { authenticate, isAdmin, hashPassword } from "../auth";
 import { logger as appLogger } from "../utils/logger";
@@ -47,6 +49,8 @@ export function registerAdminRoutes(app: Express): void {
       // Delete dependent tables first
       await db.delete(filamentHistory);
       await db.delete(printJobs);
+      await db.delete(pendingUploads);
+      await db.delete(uploadSessions);
       await db.delete(filamentSlicerProfiles);
       await db.delete(slicerProfiles);
       await db.delete(userSharing);

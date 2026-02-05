@@ -1197,7 +1197,7 @@ Downloads a JSON backup of the current user's data.
 - **Response Body**:
   ```json
   {
-    "version": "1.2",
+    "version": "1.4",
     "backupType": "user",
     "exportedAt": "2026-02-04T12:00:00.000Z",
     "userSettings": {
@@ -1210,6 +1210,8 @@ Downloads a JSON backup of the current user's data.
       "printJobs": [],
       "slicerProfiles": [],
       "filamentHistory": [],
+      "uploadSessions": [],
+      "pendingUploads": [],
       "userSharing": [],
       "backupHistory": [],
       "manufacturers": [],
@@ -1240,6 +1242,8 @@ Restores data from a previously downloaded backup file.
       "slicerProfiles": 2,
       "filamentHistory": 15,
       "userSharing": 1,
+      "uploadSessions": 2,
+      "pendingUploads": 8,
       "materialCompatibility": 8,
       "userSettings": true
     }
@@ -1337,7 +1341,7 @@ Downloads a complete backup of all users' data (admin only).
 - **Response Body**:
   ```json
   {
-    "version": "1.2",
+    "version": "1.4",
     "backupType": "admin_full",
     "exportedAt": "2026-02-04T12:00:00.000Z",
     "data": {
@@ -1346,6 +1350,8 @@ Downloads a complete backup of all users' data (admin only).
       "printJobs": [],
       "slicerProfiles": [],
       "filamentHistory": [],
+      "uploadSessions": [],
+      "pendingUploads": [],
       "userSharing": [],
       "backupHistory": [],
       "manufacturers": [],
@@ -1377,6 +1383,8 @@ Restores a complete system backup including all users (admin only).
       "slicerProfiles": 10,
       "filamentHistory": 100,
       "userSharing": 5,
+      "uploadSessions": 6,
+      "pendingUploads": 20,
       "materialCompatibility": 20
     },
     "note": "3 new users created with temporary password \"changeme\""

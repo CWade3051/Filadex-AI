@@ -21,6 +21,8 @@ import {
   filamentHistory,
   userSharing,
   users,
+  uploadSessions,
+  pendingUploads,
 } from "@shared/schema";
 import { eq, and, ne, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -132,6 +134,19 @@ async function generateBackupData(userId: number) {
     .from(userSharing)
     .where(eq(userSharing.userId, userId));
 
+  const userUploadSessions = await db
+    .select()
+    .from(uploadSessions)
+    .where(eq(uploadSessions.userId, userId));
+
+  const sessionIds = userUploadSessions.map((s) => s.id);
+  const userPendingUploads = sessionIds.length > 0
+    ? await db
+        .select()
+        .from(pendingUploads)
+        .where(inArray(pendingUploads.sessionId, sessionIds))
+    : [];
+
   // Get filament history for user's filaments
   const filamentIds = userFilaments.map(f => f.id);
   const userFilamentHistory = filamentIds.length > 0
@@ -164,7 +179,7 @@ async function generateBackupData(userId: number) {
   const allCompatibility = await db.select().from(materialCompatibility);
 
   return {
-    version: "1.3",
+    version: "1.4",
     backupType: "user",
     exportedAt: new Date().toISOString(),
     userSettings: user || {},
@@ -175,6 +190,8 @@ async function generateBackupData(userId: number) {
       slicerProfiles: userProfiles,
       filamentSlicerProfiles: userFilamentSlicerProfiles,
       filamentHistory: filteredHistory,
+      uploadSessions: userUploadSessions,
+      pendingUploads: userPendingUploads,
       userSharing: userSharingSettings,
       backupHistory: userBackupHistory,
       // Shared lists
@@ -213,6 +230,8 @@ async function generateAdminBackupData() {
   const allFilamentHistory = await db.select().from(filamentHistory);
   const allUserSharing = await db.select().from(userSharing);
   const allBackupHistory = await db.select().from(backupHistory);
+  const allUploadSessions = await db.select().from(uploadSessions);
+  const allPendingUploads = await db.select().from(pendingUploads);
 
   // Shared data
   const allManufacturers = await db.select().from(manufacturers);
@@ -225,7 +244,7 @@ async function generateAdminBackupData() {
   const allCompatibility = await db.select().from(materialCompatibility);
 
   return {
-    version: "1.3",
+    version: "1.4",
     backupType: "admin_full",
     exportedAt: new Date().toISOString(),
     data: {
@@ -237,6 +256,8 @@ async function generateAdminBackupData() {
       slicerProfiles: allProfiles,
       filamentSlicerProfiles: allFilamentSlicerProfiles,
       filamentHistory: allFilamentHistory,
+      uploadSessions: allUploadSessions,
+      pendingUploads: allPendingUploads,
       userSharing: allUserSharing,
       backupHistory: allBackupHistory,
       // Shared lists
@@ -816,6 +837,7 @@ export function registerCloudBackupRoutes(app: Express) {
       }
 
       const { data, userSettings } = backupData;
+      const uploadSessionIdMap: Record<number, number> = {};
 
       // Track restored counts
       const restored = {
@@ -824,6 +846,8 @@ export function registerCloudBackupRoutes(app: Express) {
         slicerProfiles: 0,
         filamentSlicerProfiles: 0,
         filamentHistory: 0,
+        uploadSessions: 0,
+        pendingUploads: 0,
         userSharing: 0,
         materialCompatibility: 0,
         userSettings: false,
@@ -988,6 +1012,48 @@ export function registerCloudBackupRoutes(app: Express) {
             restored.userSharing++;
           } catch (insertError) {
             appLogger.warn("Could not restore sharing setting:", insertError);
+          }
+        }
+      }
+
+      // Restore upload sessions
+      if (data.uploadSessions && Array.isArray(data.uploadSessions)) {
+        for (const session of data.uploadSessions) {
+          const { id: oldId, userId: oldUserId, ...sessionData } = session;
+
+          try {
+            const [newSession] = await db.insert(uploadSessions).values({
+              ...sessionData,
+              userId,
+              expiresAt: sessionData.expiresAt ? new Date(sessionData.expiresAt) : new Date(),
+              createdAt: sessionData.createdAt ? new Date(sessionData.createdAt) : new Date(),
+            }).returning({ id: uploadSessions.id });
+            if (oldId && newSession) {
+              uploadSessionIdMap[oldId] = newSession.id;
+            }
+            restored.uploadSessions++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore upload session:", insertError);
+          }
+        }
+      }
+
+      // Restore pending uploads
+      if (data.pendingUploads && Array.isArray(data.pendingUploads)) {
+        for (const upload of data.pendingUploads) {
+          const { id, sessionId: oldSessionId, ...uploadData } = upload;
+          const newSessionId = uploadSessionIdMap[oldSessionId];
+          if (!newSessionId) continue;
+
+          try {
+            await db.insert(pendingUploads).values({
+              ...uploadData,
+              sessionId: newSessionId,
+              createdAt: uploadData.createdAt ? new Date(uploadData.createdAt) : new Date(),
+            });
+            restored.pendingUploads++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore pending upload:", insertError);
           }
         }
       }
@@ -1480,6 +1546,7 @@ export function registerCloudBackupRoutes(app: Express) {
 
       const { data, userSettings } = backupData;
       const userId = req.userId!;
+      const uploadSessionIdMap: Record<number, number> = {};
 
       // Track restored counts
       const restored = {
@@ -1488,6 +1555,8 @@ export function registerCloudBackupRoutes(app: Express) {
         slicerProfiles: 0,
         filamentSlicerProfiles: 0,
         filamentHistory: 0,
+        uploadSessions: 0,
+        pendingUploads: 0,
         userSharing: 0,
         materialCompatibility: 0,
         userSettings: false,
@@ -1655,6 +1724,48 @@ export function registerCloudBackupRoutes(app: Express) {
         }
       }
 
+      // Restore upload sessions
+      if (data.uploadSessions && Array.isArray(data.uploadSessions)) {
+        for (const session of data.uploadSessions) {
+          const { id: oldId, userId: oldUserId, ...sessionData } = session;
+
+          try {
+            const [newSession] = await db.insert(uploadSessions).values({
+              ...sessionData,
+              userId,
+              expiresAt: sessionData.expiresAt ? new Date(sessionData.expiresAt) : new Date(),
+              createdAt: sessionData.createdAt ? new Date(sessionData.createdAt) : new Date(),
+            }).returning({ id: uploadSessions.id });
+            if (oldId && newSession) {
+              uploadSessionIdMap[oldId] = newSession.id;
+            }
+            restored.uploadSessions++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore upload session:", insertError);
+          }
+        }
+      }
+
+      // Restore pending uploads
+      if (data.pendingUploads && Array.isArray(data.pendingUploads)) {
+        for (const upload of data.pendingUploads) {
+          const { id, sessionId: oldSessionId, ...uploadData } = upload;
+          const newSessionId = uploadSessionIdMap[oldSessionId];
+          if (!newSessionId) continue;
+
+          try {
+            await db.insert(pendingUploads).values({
+              ...uploadData,
+              sessionId: newSessionId,
+              createdAt: uploadData.createdAt ? new Date(uploadData.createdAt) : new Date(),
+            });
+            restored.pendingUploads++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore pending upload:", insertError);
+          }
+        }
+      }
+
       // Log the restore
       await db.insert(backupHistory).values({
         userId,
@@ -1760,6 +1871,8 @@ export function registerCloudBackupRoutes(app: Express) {
         slicerProfiles: 0,
         filamentSlicerProfiles: 0,
         filamentHistory: 0,
+        uploadSessions: 0,
+        pendingUploads: 0,
         userSharing: 0,
         materialCompatibility: 0,
       };
@@ -1768,6 +1881,7 @@ export function registerCloudBackupRoutes(app: Express) {
       const userIdMap: Record<number, number> = {};
       const filamentIdMap: Record<number, number> = {};
       const profileIdMap: Record<number, number> = {};
+      const uploadSessionIdMap: Record<number, number> = {};
 
       // Restore users (create if not exists)
       if (data.users && Array.isArray(data.users)) {
@@ -1967,6 +2081,50 @@ export function registerCloudBackupRoutes(app: Express) {
         }
       }
 
+      // Restore upload sessions (with user ID mapping)
+      if (data.uploadSessions && Array.isArray(data.uploadSessions)) {
+        for (const session of data.uploadSessions) {
+          const { id: oldId, userId: oldUserId, ...sessionData } = session;
+          const newUserId = userIdMap[oldUserId];
+          if (!newUserId) continue;
+
+          try {
+            const [newSession] = await db.insert(uploadSessions).values({
+              ...sessionData,
+              userId: newUserId,
+              expiresAt: sessionData.expiresAt ? new Date(sessionData.expiresAt) : new Date(),
+              createdAt: sessionData.createdAt ? new Date(sessionData.createdAt) : new Date(),
+            }).returning({ id: uploadSessions.id });
+            if (oldId && newSession) {
+              uploadSessionIdMap[oldId] = newSession.id;
+            }
+            restored.uploadSessions++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore upload session:", insertError);
+          }
+        }
+      }
+
+      // Restore pending uploads (with session ID mapping)
+      if (data.pendingUploads && Array.isArray(data.pendingUploads)) {
+        for (const upload of data.pendingUploads) {
+          const { id, sessionId: oldSessionId, ...uploadData } = upload;
+          const newSessionId = uploadSessionIdMap[oldSessionId];
+          if (!newSessionId) continue;
+
+          try {
+            await db.insert(pendingUploads).values({
+              ...uploadData,
+              sessionId: newSessionId,
+              createdAt: uploadData.createdAt ? new Date(uploadData.createdAt) : new Date(),
+            });
+            restored.pendingUploads++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore pending upload:", insertError);
+          }
+        }
+      }
+
       // Log the restore
       await db.insert(backupHistory).values({
         userId: req.userId!,
@@ -2050,6 +2208,8 @@ export function registerCloudBackupRoutes(app: Express) {
         slicerProfiles: 0,
         filamentSlicerProfiles: 0,
         filamentHistory: 0,
+        uploadSessions: 0,
+        pendingUploads: 0,
         userSharing: 0,
         materialCompatibility: 0,
         images: restoredImages.length,
@@ -2059,6 +2219,7 @@ export function registerCloudBackupRoutes(app: Express) {
       const userIdMap: Record<number, number> = {};
       const filamentIdMap: Record<number, number> = {};
       const profileIdMap: Record<number, number> = {};
+      const uploadSessionIdMap: Record<number, number> = {};
 
       // Restore users (create if not exists)
       if (data.users && Array.isArray(data.users)) {
@@ -2253,6 +2414,50 @@ export function registerCloudBackupRoutes(app: Express) {
             restored.userSharing++;
           } catch (insertError) {
             appLogger.warn("Could not restore user sharing:", insertError);
+          }
+        }
+      }
+
+      // Restore upload sessions (with user ID mapping)
+      if (data.uploadSessions && Array.isArray(data.uploadSessions)) {
+        for (const session of data.uploadSessions) {
+          const { id: oldId, userId: oldUserId, ...sessionData } = session;
+          const newUserId = userIdMap[oldUserId];
+          if (!newUserId) continue;
+
+          try {
+            const [newSession] = await db.insert(uploadSessions).values({
+              ...sessionData,
+              userId: newUserId,
+              expiresAt: sessionData.expiresAt ? new Date(sessionData.expiresAt) : new Date(),
+              createdAt: sessionData.createdAt ? new Date(sessionData.createdAt) : new Date(),
+            }).returning({ id: uploadSessions.id });
+            if (oldId && newSession) {
+              uploadSessionIdMap[oldId] = newSession.id;
+            }
+            restored.uploadSessions++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore upload session:", insertError);
+          }
+        }
+      }
+
+      // Restore pending uploads (with session ID mapping)
+      if (data.pendingUploads && Array.isArray(data.pendingUploads)) {
+        for (const upload of data.pendingUploads) {
+          const { id, sessionId: oldSessionId, ...uploadData } = upload;
+          const newSessionId = uploadSessionIdMap[oldSessionId];
+          if (!newSessionId) continue;
+
+          try {
+            await db.insert(pendingUploads).values({
+              ...uploadData,
+              sessionId: newSessionId,
+              createdAt: uploadData.createdAt ? new Date(uploadData.createdAt) : new Date(),
+            });
+            restored.pendingUploads++;
+          } catch (insertError) {
+            appLogger.warn("Could not restore pending upload:", insertError);
           }
         }
       }

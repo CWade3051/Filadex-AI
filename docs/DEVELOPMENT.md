@@ -427,6 +427,8 @@ Backups are stored in `backups/` directory and include:
 - Uploaded filament images
 - Uploaded slicer profile files
 
+The database dump includes photo import review queue data (`upload_sessions`, `pending_uploads`).
+
 ### Web UI Backups (JSON)
 
 Access via **Tools > Cloud Backup** in the app:

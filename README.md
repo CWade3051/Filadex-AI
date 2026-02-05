@@ -213,6 +213,7 @@ Filadex provides multiple backup options to protect your data:
 | Print Jobs | ✅ Your jobs | ✅ All users | ✅ All |
 | Filament History | ✅ Your history | ✅ All users | ✅ All |
 | Slicer Profiles | ✅ Your profiles | ✅ All users | ✅ All |
+| Photo Import Review Queue | ✅ Your sessions | ✅ All users | ✅ All |
 | Material Compatibility | ✅ All | ✅ All | ✅ All |
 | User Sharing Settings | ✅ Your settings | ✅ All users | ✅ All |
 | Backup History | ✅ Your logs | ✅ All logs | ✅ All |
@@ -242,6 +243,8 @@ Filadex uses PostgreSQL with the following tables:
 | `user_sharing` | Public sharing settings |
 | `cloud_backup_configs` | Cloud backup provider configurations |
 | `backup_history` | Backup/restore operation logs |
+| `upload_sessions` | Photo import review sessions (QR/mobile uploads) |
+| `pending_uploads` | Pending photo imports tied to sessions |
 
 ### Key Fields in Filaments Table
 

@@ -202,6 +202,8 @@ filadex_backup_YYYYMMDD_HHMMSS/
 | `print_jobs` | Print job logs | name, filament usage, duration, status, timestamps |
 | `filament_history` | Usage history | filament_id, change_type, quantity, notes |
 | `slicer_profiles` | Slicer configs | name, slicer, material, settings JSON |
+| `upload_sessions` | Photo import sessions | user_id, expires_at, created_at |
+| `pending_uploads` | Pending photo imports | session_id, filename, status |
 | `material_compatibility` | Adhesion matrix | material1, material2, compatibility rating, notes |
 | `manufacturers` | Manufacturer list | name, sort_order |
 | `materials` | Material types | name, sort_order |
