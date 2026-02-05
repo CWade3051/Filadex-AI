@@ -22,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Tooltip,
   TooltipContent,
@@ -109,7 +108,7 @@ export function MaterialCompatibilityMatrix({ open, onOpenChange }: Compatibilit
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Grid3X3 className="h-5 w-5" />
@@ -120,7 +119,7 @@ export function MaterialCompatibilityMatrix({ open, onOpenChange }: Compatibilit
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-4 py-2">
+        <div className="flex flex-col gap-3 py-2 sm:flex-row sm:items-center sm:gap-4">
           <div className="flex-1">
             <Select value={selectedMaterial} onValueChange={setSelectedMaterial}>
               <SelectTrigger>
@@ -159,7 +158,7 @@ export function MaterialCompatibilityMatrix({ open, onOpenChange }: Compatibilit
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 py-2 border-y">
+        <div className="flex flex-wrap items-center gap-4 py-2 border-y">
           <span className="text-sm text-muted-foreground">Legend:</span>
           {Object.entries(LEVEL_COLORS).map(([level, { bg, icon: Icon }]) => (
             <div key={level} className="flex items-center gap-1">
@@ -169,7 +168,7 @@ export function MaterialCompatibilityMatrix({ open, onOpenChange }: Compatibilit
           ))}
         </div>
 
-        <ScrollArea className="flex-1 pr-4">
+        <div className="flex-1 pr-2 sm:pr-4 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center h-48">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -187,7 +186,7 @@ export function MaterialCompatibilityMatrix({ open, onOpenChange }: Compatibilit
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         {/* Matrix Grid View (for small datasets) */}
         {uniqueMaterials.length > 0 && uniqueMaterials.length <= 10 && (

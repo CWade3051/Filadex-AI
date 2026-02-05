@@ -154,8 +154,8 @@ export function BatchActionsPanel({
 
   return (
     <>
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 bg-background border border-border rounded-lg shadow-lg p-3 flex items-center space-x-2">
-        <div className="flex items-center mr-2 border-r border-border pr-2">
+      <div className="fixed bottom-2 sm:bottom-4 left-1/2 transform -translate-x-1/2 z-50 bg-background border border-border rounded-lg shadow-lg p-2 sm:p-3 flex flex-wrap items-center justify-center gap-2 w-[calc(100%-1rem)] sm:w-auto max-w-[95vw] pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
+        <div className="flex items-center border-r border-border pr-2">
           <Button
             variant="ghost"
             size="sm"
@@ -172,7 +172,7 @@ export function BatchActionsPanel({
               {allSelected ? t('batch.deselectAll') : t('batch.selectAll')}
             </span>
           </Button>
-          <div className="text-sm font-medium ml-2">
+          <div className="text-sm font-medium ml-2 hidden sm:block">
             {t('batch.selected', { count: selectedCount, total: totalFilaments })}
           </div>
         </div>

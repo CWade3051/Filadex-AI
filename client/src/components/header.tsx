@@ -87,8 +87,8 @@ export function Header({
 
   return (
     <header className="theme-primary-bg text-white shadow-md">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center space-x-2">
+      <div className="container mx-auto px-4 py-3 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+        <div className="flex items-center space-x-2 shrink-0">
           <Link href="/">
             <div className="flex items-center space-x-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 375 375">
@@ -102,7 +102,7 @@ export function Header({
             </div>
           </Link>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {/* Settings Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

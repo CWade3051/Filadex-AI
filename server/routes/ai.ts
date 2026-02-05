@@ -8,7 +8,11 @@ import QRCode from "qrcode";
 import { authenticate } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
-import { uploadSessions as uploadSessionsTable, pendingUploads as pendingUploadsTable } from "../../shared/schema";
+import {
+  uploadSessions as uploadSessionsTable,
+  pendingUploads as pendingUploadsTable,
+  filaments as filamentsTable,
+} from "../../shared/schema";
 import { and, eq, desc, inArray, count } from "drizzle-orm";
 import { logger } from "../utils/logger";
 import { encrypt, decrypt, maskApiKey, isValidOpenAIKeyFormat } from "../utils/encryption";
@@ -348,28 +352,6 @@ export function registerAIRoutes(app: Express): void {
       }
       
       logger.info(`Processing ${files.length} images for bulk extraction using model: ${model}...`);
-      
-      // Convert files to base64 array
-      const images = files.map((file) => ({
-        base64: fs.readFileSync(file.path).toString("base64"),
-        filename: file.filename,
-        originalName: file.originalname,
-      }));
-      
-      // Extract data from all images
-      const results = await extractFilamentDataFromImages(
-        images.map((img) => ({ base64: img.base64, filename: img.filename })),
-        apiKey,
-        model
-      );
-      
-      // Build response with image URLs
-      const processedResults = results.map((result, index) => ({
-        imageUrl: `/uploads/filaments/${images[index].filename}`,
-        originalName: images[index].originalName,
-        extractedData: result.data,
-        error: result.error,
-      }));
 
       const sessionToken = crypto.randomBytes(32).toString("hex");
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -378,17 +360,15 @@ export function registerAIRoutes(app: Express): void {
         .values({
           sessionToken,
           userId: req.userId,
-          status: "completed",
+          status: "processing",
           expiresAt,
         })
         .returning({ id: uploadSessionsTable.id });
 
-      const pendingRows = processedResults.map((result) => ({
+      const pendingRows = files.map((file) => ({
         sessionId: session.id,
-        imageUrl: result.imageUrl,
-        extractedData: result.extractedData ? JSON.stringify(result.extractedData) : null,
-        status: result.error ? "error" : "ready",
-        errorMessage: result.error || null,
+        imageUrl: `/uploads/filaments/${file.filename}`,
+        status: "processing",
       }));
 
       const inserted = await db
@@ -396,16 +376,71 @@ export function registerAIRoutes(app: Express): void {
         .values(pendingRows)
         .returning({ id: pendingUploadsTable.id });
 
-      const resultsWithIds = processedResults.map((result, index) => ({
-        ...result,
-        pendingUploadId: inserted[index]?.id,
-      }));
+      const resultsWithIds: Array<{
+        imageUrl: string;
+        originalName: string;
+        extractedData?: ExtractedFilamentData;
+        error?: string;
+        pendingUploadId?: number;
+      }> = [];
+
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const pendingId = inserted[index]?.id;
+        const imageUrl = `/uploads/filaments/${file.filename}`;
+
+        try {
+          const base64 = fs.readFileSync(file.path).toString("base64");
+          const extractedData = await extractFilamentDataFromImage(base64, apiKey, model);
+
+          if (pendingId) {
+            await db
+              .update(pendingUploadsTable)
+              .set({
+                extractedData: JSON.stringify(extractedData),
+                status: "ready",
+                errorMessage: null,
+              })
+              .where(eq(pendingUploadsTable.id, pendingId));
+          }
+
+          resultsWithIds.push({
+            imageUrl,
+            originalName: file.originalname,
+            extractedData,
+            pendingUploadId: pendingId,
+          });
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Failed to process image";
+          if (pendingId) {
+            await db
+              .update(pendingUploadsTable)
+              .set({
+                status: "error",
+                errorMessage,
+              })
+              .where(eq(pendingUploadsTable.id, pendingId));
+          }
+
+          resultsWithIds.push({
+            imageUrl,
+            originalName: file.originalname,
+            error: errorMessage,
+            pendingUploadId: pendingId,
+          });
+        }
+      }
+
+      await db
+        .update(uploadSessionsTable)
+        .set({ status: "completed" })
+        .where(eq(uploadSessionsTable.id, session.id));
       
       res.json({
         success: true,
         total: files.length,
-        processed: processedResults.filter((r) => !r.error).length,
-        failed: processedResults.filter((r) => r.error).length,
+        processed: resultsWithIds.filter((r) => !r.error).length,
+        failed: resultsWithIds.filter((r) => r.error).length,
         results: resultsWithIds,
       });
     } catch (error) {
@@ -479,6 +514,10 @@ export function registerAIRoutes(app: Express): void {
    */
   app.get("/api/ai/upload-session/:token", authenticate, async (req: Request, res: Response) => {
     try {
+      res.set("Cache-Control", "no-store, max-age=0");
+      res.set("Pragma", "no-cache");
+      res.set("Expires", "0");
+
       const { token } = req.params;
       const sessionRows = await db
         .select()
@@ -774,6 +813,10 @@ export function registerAIRoutes(app: Express): void {
    */
   app.get("/api/ai/pending-uploads", authenticate, async (req: Request, res: Response) => {
     try {
+      res.set("Cache-Control", "no-store, max-age=0");
+      res.set("Pragma", "no-cache");
+      res.set("Expires", "0");
+
       const sessions = await db
         .select({ id: uploadSessionsTable.id })
         .from(uploadSessionsTable)
@@ -800,7 +843,45 @@ export function registerAIRoutes(app: Express): void {
         )
         .orderBy(desc(pendingUploadsTable.createdAt));
 
-      const items = uploads.map((upload) => ({
+      let visibleUploads = uploads;
+
+      if (uploads.length > 0) {
+        const imageUrls = uploads
+          .map((upload) => upload.imageUrl)
+          .filter((url): url is string => Boolean(url));
+
+        if (imageUrls.length > 0) {
+          const imported = await db
+            .select({ imageUrl: filamentsTable.imageUrl })
+            .from(filamentsTable)
+            .where(
+              and(
+                eq(filamentsTable.userId, req.userId),
+                inArray(filamentsTable.imageUrl, imageUrls)
+              )
+            );
+
+          const importedUrls = new Set(
+            imported.map((row) => row.imageUrl).filter((url): url is string => Boolean(url))
+          );
+
+          if (importedUrls.size > 0) {
+            visibleUploads = uploads.filter((upload) => !importedUrls.has(upload.imageUrl));
+
+            await db
+              .update(pendingUploadsTable)
+              .set({ status: "imported" })
+              .where(
+                and(
+                  inArray(pendingUploadsTable.sessionId, sessionIds),
+                  inArray(pendingUploadsTable.imageUrl, Array.from(importedUrls))
+                )
+              );
+          }
+        }
+      }
+
+      const items = visibleUploads.map((upload) => ({
         id: upload.id,
         imageUrl: upload.imageUrl,
         extractedData: parseExtractedData(upload.extractedData),
@@ -808,14 +889,14 @@ export function registerAIRoutes(app: Express): void {
         status: upload.status,
       }));
 
-      const pendingCount = uploads.filter((u) => u.status === "pending" || u.status === "processing").length;
-      const processedCount = uploads.filter((u) => u.status === "ready" || u.status === "error").length;
+      const pendingCount = visibleUploads.filter((u) => u.status === "pending" || u.status === "processing").length;
+      const processedCount = visibleUploads.filter((u) => u.status === "ready" || u.status === "error").length;
 
       res.json({
         items,
         pendingCount,
         processedCount,
-        totalCount: uploads.length,
+        totalCount: visibleUploads.length,
       });
     } catch (error) {
       logger.error("Error getting pending uploads:", error);
@@ -927,7 +1008,7 @@ export function registerAIRoutes(app: Express): void {
   });
 
   /**
-   * Mark a set of pending uploads as imported (bulk delete)
+   * Mark a set of pending uploads as imported
    */
   app.post("/api/ai/pending-uploads/mark-imported", authenticate, async (req: Request, res: Response) => {
     try {
@@ -947,7 +1028,8 @@ export function registerAIRoutes(app: Express): void {
 
       const sessionIds = sessions.map((s) => s.id);
       await db
-        .delete(pendingUploadsTable)
+        .update(pendingUploadsTable)
+        .set({ status: "imported" })
         .where(
           and(
             inArray(pendingUploadsTable.sessionId, sessionIds),

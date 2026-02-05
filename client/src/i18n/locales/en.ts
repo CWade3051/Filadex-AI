@@ -796,6 +796,8 @@ const translations = {
     photosProcessed: '{{count}} photo(s) ready for review',
     viewResults: 'View Results',
     clearAll: 'Clear All',
+    selectAll: 'Select All',
+    deselectAll: 'Deselect All',
     confirmClearAll: 'Clear all pending imports?',
     setLocationForAll: 'Set location for all:',
     clearLocations: 'Clear',

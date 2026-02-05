@@ -752,6 +752,8 @@ const translations = {
     photosProcessed: '{{count}} Foto(s) zur Überprüfung bereit',
     viewResults: 'Ergebnisse anzeigen',
     clearAll: 'Alle löschen',
+    selectAll: 'Alle auswählen',
+    deselectAll: 'Alle abwählen',
     confirmClearAll: 'Alle ausstehenden Importe löschen?',
     setLocationForAll: 'Standort für alle setzen:',
     clearLocations: 'Löschen',

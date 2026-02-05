@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -535,7 +534,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Cloud className="h-5 w-5" />
@@ -546,8 +545,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-6">
+        <div className="flex-1 space-y-6 pr-2 sm:pr-4">
             {/* Local Backup & Restore */}
             <Card>
               <CardHeader className="pb-3">
@@ -557,8 +555,8 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
                 </CardTitle>
                 <CardDescription>Download or restore from a local backup file</CardDescription>
               </CardHeader>
-              <CardContent className="flex gap-2">
-                <Button onClick={handleDownloadLocal} variant="outline">
+              <CardContent className="flex flex-col gap-2 sm:flex-row">
+                <Button onClick={handleDownloadLocal} variant="outline" className="w-full sm:w-auto">
                   <Download className="h-4 w-4 mr-2" />
                   Download Backup
                 </Button>
@@ -574,6 +572,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
                   onClick={() => fileInputRef.current?.click()} 
                   variant="outline"
                   disabled={restoreMutation.isPending}
+                  className="w-full sm:w-auto"
                 >
                   {restoreMutation.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -597,8 +596,8 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
                     Backup/restore ALL users' data. New users created with password "changeme"
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex gap-2">
-                  <Button onClick={handleDownloadAdminBackup} variant="outline">
+                <CardContent className="flex flex-col gap-2 sm:flex-row">
+                  <Button onClick={handleDownloadAdminBackup} variant="outline" className="w-full sm:w-auto">
                     <Download className="h-4 w-4 mr-2" />
                     Download Full Backup
                   </Button>
@@ -614,6 +613,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
                     onClick={() => adminFileInputRef.current?.click()} 
                     variant="outline"
                     disabled={adminRestoreMutation.isPending}
+                    className="w-full sm:w-auto"
                   >
                     {adminRestoreMutation.isPending ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -963,8 +963,7 @@ export function CloudBackup({ open, onOpenChange }: CloudBackupProps) {
                 </div>
               </div>
             )}
-          </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

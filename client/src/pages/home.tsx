@@ -45,6 +45,9 @@ export default function Home() {
     queryKey: ['/api/filaments'],
     staleTime: 0, // Daten immer als veraltet betrachten, um Auto-Refresh zu unterstützen
     refetchOnMount: true, // Bei Mounten immer neu laden
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   // Filter filaments based on all filters

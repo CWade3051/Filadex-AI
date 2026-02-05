@@ -109,6 +109,10 @@ export const getQueryFn: <T>(options: {
 
       const res = await fetch(url, {
         credentials: "include",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
       });
 
       // Handle 401 errors based on the behavior option

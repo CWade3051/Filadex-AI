@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -596,7 +595,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="h-5 w-5" />
@@ -607,11 +606,11 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col gap-4">
+        <div className="flex-1 flex flex-col gap-4">
           {/* Actions bar */}
-          <div className="flex flex-wrap gap-2 items-center justify-between">
-            <div className="flex gap-2 items-center flex-1 min-w-0">
-              <div className="relative flex-1 max-w-xs">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-1 sm:min-w-0">
+              <div className="relative w-full sm:flex-1 sm:max-w-xs">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search profiles..."
@@ -621,7 +620,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                 />
               </div>
               <Select value={filterManufacturer} onValueChange={setFilterManufacturer}>
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="w-full sm:w-[150px]">
                   <SelectValue placeholder="Manufacturer" />
                 </SelectTrigger>
                 <SelectContent>
@@ -634,7 +633,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                 </SelectContent>
               </Select>
               <Select value={filterMaterial} onValueChange={setFilterMaterial}>
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="w-full sm:w-[150px]">
                   <SelectValue placeholder="Material" />
                 </SelectTrigger>
                 <SelectContent>
@@ -653,6 +652,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                 setShowUploadForm(true);
               }}
               size="sm"
+              className="w-full sm:w-auto"
             >
               <Plus className="h-4 w-4 mr-1" />
               Upload Profile
@@ -666,7 +666,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                 <CardTitle className="text-base">Upload New Profile</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Profile File {isEditing ? "" : "*"}</Label>
                     <Input
@@ -699,7 +699,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Manufacturer</Label>
                     <Select
@@ -742,7 +742,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Printer Model</Label>
                     <Select
@@ -875,13 +875,14 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                   </Label>
                 </div>
 
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={resetUploadForm}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button variant="outline" onClick={resetUploadForm} className="w-full sm:w-auto">
                     Cancel
                   </Button>
                   <Button
                     onClick={handleSaveProfile}
                     disabled={uploadMutation.isPending || updateMutation.isPending}
+                    className="w-full sm:w-auto"
                   >
                     {(uploadMutation.isPending || updateMutation.isPending) && (
                       <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -899,7 +900,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
           )}
 
           {/* Profiles list */}
-          <ScrollArea className="flex-1">
+          <div className="flex-1 overflow-y-auto">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -911,7 +912,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                   : "No profiles match your filters."}
               </div>
             ) : (
-              <div className="space-y-3 pr-4">
+              <div className="space-y-3 pr-2 sm:pr-4">
                 {filteredProfiles.map((profile) => {
                   const settings = getParsedSettings(profile);
                   return (
@@ -1013,7 +1014,7 @@ export function SlicerProfiles({ open, onOpenChange, initialProfileId }: SlicerP
                 })}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -163,6 +163,8 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   const processingPollingRef = useRef<NodeJS.Timeout | null>(null); // For polling processing results
   const detectedUploadUrlsRef = useRef<Set<string>>(new Set()); // Track uploads detected by startPolling (prevents re-detection)
   const importedUrlsRef = useRef<Set<string>>(new Set()); // Track URLs that have been imported (prevents re-adding after import)
+  const pollingInitializedRef = useRef(false);
+  const pollingTokenRef = useRef<string | null>(null);
   
   // Initialize importedUrlsRef from localStorage to prevent re-importing after page refresh
   useEffect(() => {
@@ -208,7 +210,12 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     fetch("/api/ai/pending-uploads", {
       method: "DELETE",
       credentials: "include",
-    }).catch((e) => console.error("Failed to clear pending uploads:", e));
+    })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/ai/pending-uploads"] });
+        refetchPendingUploads();
+      })
+      .catch((e) => console.error("Failed to clear pending uploads:", e));
     setProcessedImages([]);
     setSelectedFiles([]);
     setPendingPhotoCount(0);
@@ -227,12 +234,17 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       processingPollingRef.current = null;
     }
 
+    pollingInitializedRef.current = false;
+    pollingTokenRef.current = null;
     detectedUploadUrlsRef.current.clear();
     importedUrlsRef.current.clear();
 
     try {
       localStorage.removeItem('filadex_mobile_session');
       localStorage.removeItem('filadex_imported_urls');
+      if (mobileSession?.token) {
+        localStorage.removeItem(`filadex_detected_upload_urls_${mobileSession.token}`);
+      }
     } catch (e) {
       console.error('Failed to clear import state:', e);
     }
@@ -254,7 +266,12 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         fetch(`/api/ai/pending-uploads/${target.pendingUploadId}`, {
           method: "DELETE",
           credentials: "include",
-        }).catch((e) => console.error("Failed to delete pending upload:", e));
+        })
+          .then(() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/ai/pending-uploads"] });
+            refetchPendingUploads();
+          })
+          .catch((e) => console.error("Failed to delete pending upload:", e));
       }
       return prev.filter((_, i) => i !== index);
     });
@@ -277,41 +294,79 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
   const { data: pendingUploadsData, refetch: refetchPendingUploads } = useQuery({
     queryKey: ["/api/ai/pending-uploads"],
     enabled: isOpen,
+    refetchInterval: isOpen ? 2000 : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
+
+  const pendingUploadsSummary = pendingUploadsData ?? {
+    items: [],
+    pendingCount: 0,
+    processedCount: 0,
+    totalCount: 0,
+  };
+  const pendingUploadsPendingCount = pendingUploadsSummary.pendingCount ?? 0;
+  const pendingUploadsProcessedCount = pendingUploadsSummary.processedCount ?? 0;
+  const pendingUploadsTotalCount = pendingUploadsSummary.totalCount ?? 0;
+  const hasQueueProcessing =
+    pendingUploadsPendingCount > 0 ||
+    (pendingUploadsTotalCount > 0 && pendingUploadsProcessedCount < pendingUploadsTotalCount);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const intervalId = setInterval(() => {
+      refetchPendingUploads();
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [isOpen, refetchPendingUploads]);
 
   useEffect(() => {
     if (!isOpen || !pendingUploadsData) return;
     const items = pendingUploadsData.items || [];
     const visibleItems = items.filter((item: any) => item.extractedData || item.error);
 
-    setProcessedImages(
-      visibleItems.map((item: any) => {
+    setProcessedImages((prev) => {
+      const previousById = new Map<number | undefined, ProcessedImage>(
+        prev.map((img) => [img.pendingUploadId, img])
+      );
+
+      return visibleItems.map((item: any) => {
         const remainingPercentage = Number.isFinite(Number(item.extractedData?.remainingPercentage))
           ? Math.max(0, Math.min(100, Math.round(Number(item.extractedData.remainingPercentage))))
           : 100;
+        const existing = previousById.get(item.id);
 
         return {
           pendingUploadId: item.id,
           imageUrl: item.imageUrl,
           extractedData: item.extractedData,
           error: item.error,
-          selected: !item.error && (item.extractedData?.confidence ?? 0) > 0.3,
-          notes: item.extractedData?.notes || "",
-          storageLocation: "",
-          status: item.extractedData?.isSealed === false ? "opened" : "sealed",
-          remainingPercentage,
-          lastDryingDate: "",
+          selected: existing?.selected ?? (!item.error && ((item.extractedData?.confidence ?? 0) > 0.3)),
+          notes: existing?.notes ?? (item.extractedData?.notes || ""),
+          storageLocation: existing?.storageLocation ?? "",
+          status: existing?.status ?? (item.extractedData?.isSealed === false ? "opened" : "sealed"),
+          remainingPercentage: existing?.remainingPercentage ?? remainingPercentage,
+          lastDryingDate: existing?.lastDryingDate ?? "",
+          isExpanded: existing?.isExpanded ?? false,
         } as ProcessedImage;
-      })
-    );
+      });
+    });
 
-    const pendingCount = pendingUploadsData.pendingCount ?? 0;
-    const processedCount = pendingUploadsData.processedCount ?? 0;
-    const totalCount = pendingUploadsData.totalCount ?? items.length;
+    const pendingCount = pendingUploadsPendingCount;
+    const processedCount = pendingUploadsProcessedCount;
+    const totalCount = pendingUploadsTotalCount || items.length;
     setPendingPhotoCount(pendingCount);
     setProcessingProgress({ current: processedCount, total: totalCount });
-    setIsProcessing(pendingCount > 0);
-  }, [pendingUploadsData, isOpen]);
+    setIsProcessing(hasQueueProcessing);
+  }, [
+    pendingUploadsData,
+    isOpen,
+    hasQueueProcessing,
+    pendingUploadsPendingCount,
+    pendingUploadsProcessedCount,
+    pendingUploadsTotalCount,
+  ]);
 
   // Fetch existing options for dropdowns
   const { data: manufacturers = [] } = useQuery<any[]>({
@@ -568,6 +623,20 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
       return;
     }
     
+    pollingTokenRef.current = token;
+    pollingInitializedRef.current = false;
+    detectedUploadUrlsRef.current.clear();
+    try {
+      const savedDetected = localStorage.getItem(`filadex_detected_upload_urls_${token}`);
+      if (savedDetected) {
+        const urls = JSON.parse(savedDetected);
+        urls.forEach((url: string) => detectedUploadUrlsRef.current.add(url));
+        pollingInitializedRef.current = true;
+      }
+    } catch (e) {
+      console.error('Failed to load detected URLs:', e);
+    }
+
     setIsPolling(true);
     
     pollingRef.current = setInterval(async () => {
@@ -577,6 +646,30 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
         });
         if (response.ok) {
           const data = await response.json();
+
+          if (!pollingInitializedRef.current) {
+            data.images.forEach((img: any) => {
+              if (img.imageUrl) {
+                detectedUploadUrlsRef.current.add(img.imageUrl);
+              }
+            });
+            try {
+              localStorage.setItem(
+                `filadex_detected_upload_urls_${token}`,
+                JSON.stringify([...detectedUploadUrlsRef.current])
+              );
+            } catch (e) {
+              console.error('Failed to save detected URLs:', e);
+            }
+            setPendingPhotoCount(data.pendingCount || 0);
+            setProcessingProgress({
+              current: data.processedCount || 0,
+              total: data.imageCount || 0,
+            });
+            setIsProcessing((data.pendingCount || 0) > 0 || data.processing);
+            pollingInitializedRef.current = true;
+            return;
+          }
           
           // Find new images that we haven't detected yet (URL-based tracking only)
           const newImages = data.images.filter((img: any) => 
@@ -588,6 +681,14 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             newImages.forEach((img: any) => {
               detectedUploadUrlsRef.current.add(img.imageUrl);
             });
+            try {
+              localStorage.setItem(
+                `filadex_detected_upload_urls_${token}`,
+                JSON.stringify([...detectedUploadUrlsRef.current])
+              );
+            } catch (e) {
+              console.error('Failed to save detected URLs:', e);
+            }
             
             // Update pending count and show notification
             setPendingPhotoCount(prev => prev + newImages.length);
@@ -793,7 +894,12 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             headers: { "Content-Type": "application/json" },
             credentials: "include",
             body: JSON.stringify({ ids: importedIds }),
-          }).catch((e) => console.error("Failed to mark pending uploads imported:", e));
+          })
+            .then(() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/ai/pending-uploads"] });
+              refetchPendingUploads();
+            })
+            .catch((e) => console.error("Failed to mark pending uploads imported:", e));
         }
 
         importedImages.forEach(img => {
@@ -1097,7 +1203,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto sm:overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5" />
@@ -1129,12 +1235,14 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 <Smartphone className="h-4 w-4 mr-2" />
                 {t("ai.mobileUpload")}
               </TabsTrigger>
-              <TabsTrigger value="review" disabled={processedImages.length === 0 && !isProcessing}>
+              <TabsTrigger value="review" disabled={processedImages.length === 0 && !hasQueueProcessing}>
                 <Check className="h-4 w-4 mr-2" />
                 {t("ai.reviewResults")}
-                {isProcessing && (pendingPhotoCount > 0 || (processingProgress.total > processingProgress.current)) && (
+                {hasQueueProcessing && (pendingUploadsPendingCount > 0 || (pendingUploadsTotalCount > pendingUploadsProcessedCount)) && (
                   <span className="ml-1 text-xs bg-primary/20 px-1.5 py-0.5 rounded-full animate-pulse">
-                    {pendingPhotoCount > 0 ? pendingPhotoCount : (processingProgress.total - processingProgress.current)}
+                    {pendingUploadsPendingCount > 0
+                      ? pendingUploadsPendingCount
+                      : (pendingUploadsTotalCount - pendingUploadsProcessedCount)}
                   </span>
                 )}
               </TabsTrigger>
@@ -1237,7 +1345,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                     {t("ai.qrCodeExpires", { minutes: "30" })}
                   </p>
                   
-                  {isProcessing ? (
+                  {hasQueueProcessing ? (
                     <div className="space-y-3">
                       <div className="flex items-center justify-center gap-2 text-orange-500">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -1247,20 +1355,26 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                       </div>
                       <div className="w-full max-w-xs mx-auto">
                         <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span>{processingProgress.current > 0 ? processingProgress.current : processedImages.length} completed</span>
-                          <span>{pendingPhotoCount > 0 ? pendingPhotoCount : (processingProgress.total - processingProgress.current)} pending</span>
+                          <span>
+                            {pendingUploadsProcessedCount > 0 ? pendingUploadsProcessedCount : processedImages.length} completed
+                          </span>
+                          <span>
+                            {pendingUploadsPendingCount > 0
+                              ? pendingUploadsPendingCount
+                              : (pendingUploadsTotalCount - pendingUploadsProcessedCount)} pending
+                          </span>
                         </div>
                         <Progress 
-                          value={processingProgress.total > 0 
-                            ? (processingProgress.current / processingProgress.total) * 100 
-                            : (pendingPhotoCount > 0 ? (processedImages.length / (processedImages.length + pendingPhotoCount)) * 100 : 0)
-                          } 
+                          value={pendingUploadsTotalCount > 0 
+                            ? (pendingUploadsProcessedCount / pendingUploadsTotalCount) * 100 
+                            : (pendingUploadsPendingCount > 0 ? (processedImages.length / (processedImages.length + pendingUploadsPendingCount)) * 100 : 0)
+                          }
                           className="h-2"
                         />
                         <p className="text-xs text-center mt-1 text-muted-foreground">
-                          {processingProgress.total > 0 
-                            ? `${processingProgress.current} of ${processingProgress.total} photos processed`
-                            : `${processedImages.length} of ${processedImages.length + pendingPhotoCount} photos processed`
+                          {pendingUploadsTotalCount > 0 
+                            ? `${pendingUploadsProcessedCount} of ${pendingUploadsTotalCount} photos processed`
+                            : `${processedImages.length} of ${processedImages.length + pendingUploadsPendingCount} photos processed`
                           }
                         </p>
                       </div>
@@ -1294,12 +1408,16 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                     onClick={() => {
                       if (mobileSession?.token) {
                         deleteUploadSession(mobileSession.token);
+                        localStorage.removeItem(`filadex_detected_upload_urls_${mobileSession.token}`);
                       }
                       setMobileSession(null);
                       if (pollingRef.current) {
                         clearInterval(pollingRef.current);
                         pollingRef.current = null;
                       }
+                      pollingInitializedRef.current = false;
+                      pollingTokenRef.current = null;
+                      detectedUploadUrlsRef.current.clear();
                     }}
                   >
                     {t("ai.cancelSession")}
@@ -1309,9 +1427,9 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
             </TabsContent>
 
             {/* Review Tab */}
-            <TabsContent value="review" className="flex-1 flex flex-col mt-4 h-full overflow-hidden">
+            <TabsContent value="review" className="flex-1 flex flex-col mt-4 h-full overflow-visible sm:overflow-hidden">
               {/* Show progress bar when processing */}
-              {isProcessing && (pendingPhotoCount > 0 || (processingProgress.total > 0 && processingProgress.current < processingProgress.total)) && (
+              {hasQueueProcessing && (pendingUploadsPendingCount > 0 || (pendingUploadsTotalCount > 0 && pendingUploadsProcessedCount < pendingUploadsTotalCount)) && (
                 <div className="mb-4 p-3 bg-primary/10 rounded-lg shrink-0">
                   <div className="flex items-center gap-2 mb-2">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -1320,14 +1438,20 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                     </span>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                    <span>{processingProgress.current > 0 ? processingProgress.current : processedImages.length} completed</span>
-                    <span>{pendingPhotoCount > 0 ? pendingPhotoCount : (processingProgress.total - processingProgress.current)} pending</span>
+                    <span>
+                      {pendingUploadsProcessedCount > 0 ? pendingUploadsProcessedCount : processedImages.length} completed
+                    </span>
+                    <span>
+                      {pendingUploadsPendingCount > 0
+                        ? pendingUploadsPendingCount
+                        : (pendingUploadsTotalCount - pendingUploadsProcessedCount)} pending
+                    </span>
                   </div>
                   <Progress 
-                    value={processingProgress.total > 0 
-                      ? (processingProgress.current / processingProgress.total) * 100 
-                      : (processedImages.length / (processedImages.length + pendingPhotoCount)) * 100
-                    } 
+                    value={pendingUploadsTotalCount > 0
+                      ? (pendingUploadsProcessedCount / pendingUploadsTotalCount) * 100
+                      : (processedImages.length / (processedImages.length + pendingUploadsPendingCount)) * 100
+                    }
                     className="h-2"
                   />
                 </div>
@@ -1335,8 +1459,8 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
               
               {/* Bulk storage location selector */}
               {processedImages.length > 0 && (
-                <div className="flex items-center gap-4 mb-4 p-3 bg-muted/50 rounded-lg shrink-0">
-                  <div className="flex items-center gap-2 flex-1">
+                <div className="flex flex-col gap-3 mb-4 p-3 bg-muted/50 rounded-lg shrink-0 sm:flex-row sm:items-center sm:gap-4">
+                  <div className="flex flex-col gap-2 flex-1 sm:flex-row sm:items-center">
                     <Label className="text-sm font-medium whitespace-nowrap">
                       {t("ai.setLocationForAll") || "Set location for all:"}
                     </Label>
@@ -1373,29 +1497,62 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 </div>
               )}
               
-              <div className="flex items-center justify-between mb-4 shrink-0">
+              <div className="flex flex-col gap-3 mb-4 shrink-0 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-sm">
                   {selectedCount} of {processedImages.length} selected for import
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   {processedImages.length > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm(t("ai.confirmClearAll") || "Clear all pending imports?")) {
-                          resetReviewState();
-                        }
-                      }}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      {t("ai.clearAll") || "Clear All"}
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setProcessedImages(prev =>
+                            prev.map(img => ({
+                              ...img,
+                              selected: !img.error,
+                            }))
+                          );
+                        }}
+                        className="w-full sm:w-auto"
+                      >
+                        {t("ai.selectAll") || "Select All"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setProcessedImages(prev =>
+                            prev.map(img => ({
+                              ...img,
+                              selected: false,
+                            }))
+                          );
+                        }}
+                        className="w-full sm:w-auto"
+                      >
+                        {t("ai.deselectAll") || "Deselect All"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm(t("ai.confirmClearAll") || "Clear all pending imports?")) {
+                            resetReviewState();
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-700 w-full sm:w-auto"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        {t("ai.clearAll") || "Clear All"}
+                      </Button>
+                    </>
                   )}
                   <Button
                     onClick={handleImport}
                     disabled={selectedCount === 0 || importFilamentsMutation.isPending}
+                    className="w-full sm:w-auto"
                   >
                     {importFilamentsMutation.isPending ? (
                       <>
@@ -1412,7 +1569,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                 </div>
               </div>
 
-              <div className="flex-1 overflow-auto" style={{ maxHeight: 'calc(90vh - 220px)' }}>
+              <div className="flex-1 overflow-visible sm:overflow-auto max-h-none sm:max-h-[calc(90vh-220px)]">
                 <div className="space-y-4 pr-4 pb-4">
                   {processedImages.length === 0 && isProcessing && (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -1434,10 +1591,10 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                         ${img.error ? "border-red-300 bg-red-50 dark:bg-red-950/30" : ""}
                       `}
                     >
-                      <div className="flex gap-4">
+                      <div className="flex flex-col gap-4 sm:flex-row">
                         {/* Image preview - clickable for full view */}
                         <div 
-                          className="w-28 h-28 flex-shrink-0 cursor-pointer relative group"
+                          className="w-20 h-20 sm:w-28 sm:h-28 flex-shrink-0 cursor-pointer relative group"
                           onClick={() => setPreviewImage(img.imageUrl)}
                         >
                           <img
