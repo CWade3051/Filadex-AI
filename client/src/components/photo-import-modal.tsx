@@ -1601,15 +1601,371 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                     <div
                       key={index}
                       className={`
-                        border rounded-lg p-4 transition-colors
+                        border rounded-lg p-3 sm:p-4 transition-colors
                         ${img.selected ? "border-primary bg-primary/5" : "border-muted"}
                         ${img.error ? "border-red-300 bg-red-50 dark:bg-red-950/30" : ""}
                       `}
                     >
-                      <div className="flex flex-col gap-4 sm:flex-row">
+                      {/* Mobile layout */}
+                      <div className="flex flex-col gap-3 sm:hidden">
+                        {/* Mobile header: image + actions */}
+                        <div className="flex items-start gap-3">
+                          {/* Image preview */}
+                          <div 
+                            className="w-24 h-24 flex-shrink-0 cursor-pointer relative group"
+                            onClick={() => setPreviewImage(img.imageUrl)}
+                          >
+                            <img
+                              src={img.imageUrl}
+                              alt={img.originalName}
+                              className="w-full h-full object-cover rounded-md"
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors rounded-md flex items-center justify-center">
+                              <ZoomIn className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                          
+                          {/* Right side: checkbox, badge, actions */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  checked={img.selected}
+                                  onCheckedChange={() => toggleSelection(index)}
+                                  disabled={!!img.error}
+                                />
+                                {img.extractedData?.confidence && (
+                                  <Badge variant={img.extractedData.confidence > 0.7 ? "default" : "secondary"} className="text-xs">
+                                    {Math.round(img.extractedData.confidence * 100)}%
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleExpanded(index)}
+                                  className="h-7 px-2"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteFromReview(index)}
+                                  className="h-7 px-2 text-red-500"
+                                  title={t("common.delete")}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Name field - full width on mobile */}
+                            <Input
+                              value={img.extractedData?.name || ""}
+                              onChange={(e) => updateExtractedField(index, "name", e.target.value)}
+                              placeholder="Product name"
+                              className="h-8 font-medium text-sm w-full"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Mobile content */}
+                        {img.error ? (
+                          <div className="text-red-600 text-sm flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4" />
+                            {img.error}
+                          </div>
+                        ) : img.extractedData ? (
+                          <>
+                            {/* Quick view - mobile */}
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mb-2">
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Brand:</span>
+                                <span className="font-medium">{img.extractedData.manufacturer || "-"}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Material:</span>
+                                <span className="font-medium">{img.extractedData.material || "-"}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Color:</span>
+                                {img.extractedData.colorCode && (
+                                  <div
+                                    className="w-3 h-3 rounded-full border"
+                                    style={{ backgroundColor: img.extractedData.colorCode }}
+                                  />
+                                )}
+                                <span className="font-medium">{img.extractedData.colorName || "-"}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Weight:</span>
+                                <span className="font-medium">{img.extractedData.totalWeight ? `${img.extractedData.totalWeight}kg` : "-"}</span>
+                              </div>
+                              {img.extractedData.printTemp && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">Temp:</span>
+                                  <span className="font-medium">{img.extractedData.printTemp}</span>
+                                </div>
+                              )}
+                              {img.extractedData.printSpeed && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">Speed:</span>
+                                  <span className="font-medium">{img.extractedData.printSpeed}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Status:</span>
+                                <span className={`font-medium ${img.status === "sealed" ? "text-green-600" : "text-yellow-600"}`}>
+                                  {img.status === "sealed" ? "Sealed" : "Opened"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Mobile expanded edit form */}
+                            {img.isExpanded && (
+                              <div className="border-t pt-3 mt-2 space-y-3 overflow-hidden pr-1">
+                                <div className="grid grid-cols-2 gap-2">
+                                  {/* Manufacturer */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Manufacturer</Label>
+                                    <Combobox
+                                      options={manufacturerOptions}
+                                      value={img.extractedData.manufacturer || ""}
+                                      onChange={(v) => updateExtractedField(index, "manufacturer", v)}
+                                      placeholder="Select brand..."
+                                      searchPlaceholder="Search or add..."
+                                      allowCustom={true}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Material */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Material</Label>
+                                    <Combobox
+                                      options={materialOptions}
+                                      value={img.extractedData.material || ""}
+                                      onChange={(v) => updateExtractedField(index, "material", v)}
+                                      placeholder="Select material..."
+                                      searchPlaceholder="Search or add..."
+                                      allowCustom={true}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Color */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Color Name</Label>
+                                    <Combobox
+                                      options={colorOptions}
+                                      value={img.extractedData.colorName || ""}
+                                      onChange={(v) => updateExtractedField(index, "colorName", v)}
+                                      placeholder="Select color..."
+                                      searchPlaceholder="Search or add..."
+                                      allowCustom={true}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Color Code */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Color Code</Label>
+                                    <div className="flex gap-2">
+                                      <Input
+                                        type="color"
+                                        value={img.extractedData.colorCode || "#808080"}
+                                        onChange={(e) => updateExtractedField(index, "colorCode", e.target.value)}
+                                        className="h-8 w-10 p-1 cursor-pointer"
+                                      />
+                                      <Input
+                                        value={img.extractedData.colorCode || ""}
+                                        onChange={(e) => updateExtractedField(index, "colorCode", e.target.value)}
+                                        placeholder="#RRGGBB"
+                                        className="h-8 text-sm flex-1"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Diameter */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Diameter</Label>
+                                    <Combobox
+                                      options={diameterOptions}
+                                      value={img.extractedData.diameter?.toString() || "1.75"}
+                                      onChange={(v) => updateExtractedField(index, "diameter", parseFloat(v))}
+                                      placeholder="Select diameter..."
+                                      allowCustom={true}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Weight */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Weight</Label>
+                                    <Combobox
+                                      options={weightOptions}
+                                      value={img.extractedData.totalWeight?.toString() || "1"}
+                                      onChange={(v) => updateExtractedField(index, "totalWeight", parseFloat(v))}
+                                      placeholder="Select weight..."
+                                      allowCustom={true}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Print Temp */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Print Temp</Label>
+                                    <Input
+                                      value={img.extractedData.printTemp || ""}
+                                      onChange={(e) => updateExtractedField(index, "printTemp", e.target.value)}
+                                      placeholder="e.g., 190-230°C"
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Print Speed */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Print Speed</Label>
+                                    <Input
+                                      value={img.extractedData.printSpeed || ""}
+                                      onChange={(e) => updateExtractedField(index, "printSpeed", e.target.value)}
+                                      placeholder="e.g., 30-100mm/s"
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Bed Temp */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Bed Temp</Label>
+                                    <Input
+                                      value={img.extractedData.bedTemp || ""}
+                                      onChange={(e) => updateExtractedField(index, "bedTemp", e.target.value)}
+                                      placeholder="e.g., 45-60°C"
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Status */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Status</Label>
+                                    <Combobox
+                                      options={[
+                                        { value: "sealed", label: "Sealed" },
+                                        { value: "opened", label: "Opened" },
+                                      ]}
+                                      value={img.status || "sealed"}
+                                      onChange={(v) => updateImageField(index, "status", v)}
+                                      placeholder="Select status..."
+                                      allowCustom={false}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  {/* Remaining Percentage */}
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Remaining %</Label>
+                                    <div className="flex items-center gap-2">
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={img.remainingPercentage ?? 100}
+                                        onChange={(e) => updateImageField(index, "remainingPercentage", parseInt(e.target.value) || 0)}
+                                        className="h-8 text-sm"
+                                      />
+                                      <span className="text-sm text-muted-foreground">%</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Last Drying Date - only show if opened */}
+                                  {img.status === "opened" && (
+                                    <div className="min-w-0 overflow-hidden">
+                                      <Label className="text-xs text-muted-foreground">Last Dried</Label>
+                                      <div className="pr-2">
+                                        <Input
+                                          type="date"
+                                          value={img.lastDryingDate || ""}
+                                          onChange={(e) => updateImageField(index, "lastDryingDate", e.target.value)}
+                                          className="h-8 text-sm w-full"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Storage Location and Notes */}
+                                <div className="grid grid-cols-1 gap-2 border-t pt-3">
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">{t("filaments.storageLocation")}</Label>
+                                    <Combobox
+                                      options={storageLocationOptions}
+                                      value={img.storageLocation || ""}
+                                      onChange={(v) => updateImageField(index, "storageLocation", v)}
+                                      placeholder={t("filaments.selectStorageLocation")}
+                                      searchPlaceholder="Search locations..."
+                                      allowCustom={false}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">{t("filaments.locationDetails")}</Label>
+                                    <Input
+                                      placeholder={t("filaments.locationDetailsPlaceholder")}
+                                      value={img.locationDetails || ""}
+                                      onChange={(e) => updateImageField(index, "locationDetails", e.target.value)}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">{t("ai.addNotes")}</Label>
+                                    <Input
+                                      placeholder={t("ai.notesPlaceholder")}
+                                      value={img.notes || ""}
+                                      onChange={(e) => updateImageField(index, "notes", e.target.value)}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Mobile collapsed Location/Notes */}
+                            {!img.isExpanded && (
+                              <div className="grid grid-cols-1 gap-2">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">{t("ai.addLocation")}</Label>
+                                  <Combobox
+                                    options={storageLocationOptions}
+                                    value={img.storageLocation || ""}
+                                    onChange={(v) => updateImageField(index, "storageLocation", v)}
+                                    placeholder={t("ai.locationPlaceholder")}
+                                    searchPlaceholder="Search or add..."
+                                    allowCustom={true}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">{t("ai.addNotes")}</Label>
+                                  <Input
+                                    placeholder={t("ai.notesPlaceholder")}
+                                    value={img.notes || ""}
+                                    onChange={(e) => updateImageField(index, "notes", e.target.value)}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
+                      
+                      {/* Desktop layout */}
+                      <div className="hidden sm:flex gap-4">
                         {/* Image preview - clickable for full view */}
                         <div 
-                          className="w-20 h-20 sm:w-28 sm:h-28 flex-shrink-0 cursor-pointer relative group"
+                          className="w-28 h-28 flex-shrink-0 cursor-pointer relative group"
                           onClick={() => setPreviewImage(img.imageUrl)}
                         >
                           <img
@@ -1622,23 +1978,24 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                           </div>
                         </div>
 
-                        {/* Extracted data */}
+                        {/* Desktop content area */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
+                          <div className="flex items-start justify-between mb-2 gap-2">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
                               <Checkbox
                                 checked={img.selected}
                                 onCheckedChange={() => toggleSelection(index)}
                                 disabled={!!img.error}
+                                className="shrink-0"
                               />
                               <Input
                                 value={img.extractedData?.name || ""}
                                 onChange={(e) => updateExtractedField(index, "name", e.target.value)}
                                 placeholder="Product name"
-                                className="h-8 font-medium max-w-[300px]"
+                                className="h-8 font-medium flex-1 min-w-0 max-w-lg"
                               />
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               {img.extractedData?.confidence && (
                                 <Badge variant={img.extractedData.confidence > 0.7 ? "default" : "secondary"}>
                                   {Math.round(img.extractedData.confidence * 100)}% {t("ai.confidence")}
@@ -1667,15 +2024,15 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                               </Button>
                             </div>
                           </div>
-
-                          {img.error ? (
+                      {/* Desktop content - inline with header */}
+                        {img.error ? (
                             <div className="text-red-600 text-sm flex items-center gap-2">
                               <AlertCircle className="h-4 w-4" />
                               {img.error}
                             </div>
                           ) : img.extractedData ? (
                             <>
-                              {/* Quick view - always shown */}
+                              {/* Quick view - desktop */}
                               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm mb-2">
                                 <div className="flex items-center gap-1">
                                   <span className="text-muted-foreground">Brand:</span>
@@ -1880,14 +2237,16 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
 
                                     {/* Last Drying Date - only show if opened */}
                                     {img.status === "opened" && (
-                                      <div>
+                                      <div className="min-w-0 overflow-hidden">
                                         <Label className="text-xs text-muted-foreground">Last Dried</Label>
-                                        <Input
-                                          type="date"
-                                          value={img.lastDryingDate || ""}
-                                          onChange={(e) => updateImageField(index, "lastDryingDate", e.target.value)}
-                                          className="h-8 text-sm"
-                                        />
+                                        <div className="pr-2">
+                                          <Input
+                                            type="date"
+                                            value={img.lastDryingDate || ""}
+                                            onChange={(e) => updateImageField(index, "lastDryingDate", e.target.value)}
+                                            className="h-8 text-sm w-full"
+                                          />
+                                        </div>
                                       </div>
                                     )}
                                   </div>
@@ -1930,7 +2289,7 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
                                 </div>
                               )}
 
-                              {/* Collapsed Location/Notes - only show if not expanded */}
+                              {/* Collapsed Location/Notes - desktop only, show if not expanded */}
                               {!img.isExpanded && (
                                 <div className="grid grid-cols-2 gap-2 mt-2">
                                   <div>
