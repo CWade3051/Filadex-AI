@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
+import multer from "multer";
 import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes/index";
 import { setupVite, serveStatic, log } from "./vite";
@@ -43,8 +44,27 @@ app.use((req, res, next) => {
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    let status = err.status || err.statusCode || 500;
+    let message = err.message || "Internal Server Error";
+    
+    if (err instanceof multer.MulterError) {
+      status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+      if (err.code === "LIMIT_FILE_COUNT") {
+        message =
+          typeof err.limit === "number"
+            ? `Too many files uploaded at once. Please upload up to ${err.limit} files per batch.`
+            : "Too many files uploaded at once. Please upload fewer files per batch.";
+      } else if (err.code === "LIMIT_FILE_SIZE") {
+        message =
+          typeof err.limit === "number"
+            ? `File too large. Max size is ${Math.round(err.limit / (1024 * 1024))}MB.`
+            : "File too large.";
+      } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
+        message = "Unexpected file field in upload.";
+      }
+    } else if (typeof message === "string" && message.startsWith("Invalid file type")) {
+      status = 400;
+    }
 
     res.status(status).json({ message });
     throw err;

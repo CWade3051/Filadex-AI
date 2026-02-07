@@ -203,6 +203,52 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
     }
   };
 
+  const cancelProcessingMutation = useMutation({
+    mutationFn: async (token: string) => {
+      const response = await fetch(`/api/ai/upload-session/${token}/cancel`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to cancel processing");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      if (processingPollingRef.current) {
+        clearInterval(processingPollingRef.current);
+        processingPollingRef.current = null;
+      }
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      setIsPolling(false);
+      setIsProcessing(false);
+      pollingInitializedRef.current = false;
+      pollingTokenRef.current = null;
+      detectedUploadUrlsRef.current.clear();
+      if (mobileSession?.token) {
+        localStorage.removeItem(`filadex_detected_upload_urls_${mobileSession.token}`);
+      }
+      setMobileSession(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/ai/pending-uploads"] });
+      refetchPendingUploads();
+      toast({
+        title: t("ai.cancelProcessing") || "Cancel Processing",
+        description: t("ai.processingCancelled") || "Processing cancelled.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t("common.error"),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const resetReviewState = () => {
     if (mobileSession?.token) {
       deleteUploadSession(mobileSession.token);
@@ -1446,11 +1492,34 @@ export function PhotoImportModal({ isOpen, onClose, onImportComplete }: PhotoImp
               {/* Show progress bar when processing */}
               {hasQueueProcessing && (pendingUploadsPendingCount > 0 || (pendingUploadsTotalCount > 0 && pendingUploadsProcessedCount < pendingUploadsTotalCount)) && (
                 <div className="mb-4 p-3 bg-primary/10 rounded-lg shrink-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <span className="text-sm font-medium text-primary">
-                      {t("ai.processingPhotos")}
-                    </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span className="text-sm font-medium text-primary">
+                        {t("ai.processingPhotos")}
+                      </span>
+                    </div>
+                    {mobileSession?.token && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const message =
+                            t("ai.cancelProcessingConfirm") ||
+                            "Stop AI processing for remaining photos? Already processed results will stay.";
+                          if (confirm(message)) {
+                            cancelProcessingMutation.mutate(mobileSession.token);
+                          }
+                        }}
+                        disabled={cancelProcessingMutation.isPending}
+                        className="text-red-500 hover:text-red-600"
+                      >
+                        {cancelProcessingMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : null}
+                        {t("ai.cancelProcessing")}
+                      </Button>
+                    )}
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground mb-1">
                     <span>

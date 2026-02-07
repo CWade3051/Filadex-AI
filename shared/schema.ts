@@ -238,7 +238,7 @@ export const uploadSessions = pgTable("upload_sessions", {
   id: serial("id").primaryKey(),
   sessionToken: text("session_token").notNull().unique(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  status: text("status").default("pending"), // 'pending', 'uploading', 'processing', 'completed', 'expired'
+  status: text("status").default("pending"), // 'pending', 'uploading', 'processing', 'completed', 'expired', 'cancelled'
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -257,7 +257,7 @@ export const pendingUploads = pgTable("pending_uploads", {
   sessionId: integer("session_id").notNull().references(() => uploadSessions.id, { onDelete: "cascade" }),
   imageUrl: text("image_url").notNull(),
   extractedData: text("extracted_data"), // JSON string of extracted filament data
-  status: text("status").default("pending"), // 'pending', 'processing', 'ready', 'imported', 'error'
+  status: text("status").default("pending"), // 'pending', 'processing', 'ready', 'imported', 'error', 'cancelled'
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at").defaultNow(),
 });

@@ -72,6 +72,9 @@ function getLocalNetworkIP(): string {
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), "public", "uploads", "filaments");
+const MAX_UPLOAD_FILES = 50;
+const MAX_UPLOAD_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB max
+const ACTIVE_PENDING_STATUSES = ["pending", "processing", "ready", "error"] as const;
 
 // Ensure upload directory exists
 if (!fs.existsSync(uploadDir)) {
@@ -92,8 +95,8 @@ const multerStorage = multer.diskStorage({
 const upload = multer({
   storage: multerStorage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max
-    files: 50, // Max 50 files at once
+    fileSize: MAX_UPLOAD_FILE_SIZE_BYTES,
+    files: MAX_UPLOAD_FILES,
   },
   fileFilter: (_req, file, cb) => {
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
@@ -333,8 +336,12 @@ export function registerAIRoutes(app: Express): void {
   /**
    * Upload multiple images and extract filament data from all of them
    */
-  app.post("/api/ai/extract-bulk", authenticate, upload.array("images", 50), async (req: Request, res: Response) => {
-    try {
+  app.post(
+    "/api/ai/extract-bulk",
+    authenticate,
+    upload.array("images", MAX_UPLOAD_FILES),
+    async (req: Request, res: Response) => {
+      try {
       const apiKey = await getOpenAIKey(req.userId);
       if (!apiKey) {
         return res.status(400).json({
@@ -533,8 +540,12 @@ export function registerAIRoutes(app: Express): void {
       if (session.userId !== req.userId) {
         return res.status(403).json({ message: "Access denied" });
       }
+      
+      if (session.status === "cancelled") {
+        return res.status(409).json({ message: "Session cancelled" });
+      }
 
-      if (session.expiresAt < new Date() && session.status !== "expired") {
+      if (session.expiresAt < new Date() && session.status !== "expired" && session.status !== "cancelled") {
         await db
           .update(uploadSessionsTable)
           .set({ status: "expired" })
@@ -544,7 +555,12 @@ export function registerAIRoutes(app: Express): void {
       const uploads = await db
         .select()
         .from(pendingUploadsTable)
-        .where(eq(pendingUploadsTable.sessionId, session.id))
+        .where(
+          and(
+            eq(pendingUploadsTable.sessionId, session.id),
+            inArray(pendingUploadsTable.status, ACTIVE_PENDING_STATUSES)
+          )
+        )
         .orderBy(desc(pendingUploadsTable.createdAt));
 
       const images = uploads.map((upload) => ({
@@ -575,7 +591,7 @@ export function registerAIRoutes(app: Express): void {
   /**
    * Mobile upload endpoint - accepts images for a session (no auth required, uses session token)
    */
-  app.post("/api/ai/mobile-upload/:token", upload.array("images", 50), async (req: Request, res: Response) => {
+  app.post("/api/ai/mobile-upload/:token", upload.array("images", MAX_UPLOAD_FILES), async (req: Request, res: Response) => {
     try {
       const { token } = req.params;
       const sessionRows = await db
@@ -595,6 +611,10 @@ export function registerAIRoutes(app: Express): void {
           .set({ status: "expired" })
           .where(eq(uploadSessionsTable.id, session.id));
         return res.status(410).json({ message: "Session expired" });
+      }
+      
+      if (session.status === "cancelled") {
+        return res.status(409).json({ message: "Session cancelled" });
       }
       
       const files = req.files as Express.Multer.File[];
@@ -656,7 +676,12 @@ export function registerAIRoutes(app: Express): void {
       const uploads = await db
         .select()
         .from(pendingUploadsTable)
-        .where(eq(pendingUploadsTable.sessionId, session.id))
+        .where(
+          and(
+            eq(pendingUploadsTable.sessionId, session.id),
+            inArray(pendingUploadsTable.status, ACTIVE_PENDING_STATUSES)
+          )
+        )
         .orderBy(desc(pendingUploadsTable.createdAt));
 
       const unprocessedImages = uploads.filter(
@@ -736,6 +761,18 @@ export function registerAIRoutes(app: Express): void {
       (async () => {
         for (const image of unprocessedImages) {
           try {
+            const sessionCheck = await db
+              .select({ status: uploadSessionsTable.status })
+              .from(uploadSessionsTable)
+              .where(eq(uploadSessionsTable.id, session.id))
+              .limit(1);
+            
+            const currentStatus = sessionCheck[0]?.status;
+            if (!currentStatus || currentStatus === "cancelled" || currentStatus === "expired") {
+              logger.info(`Session ${token} cancelled or expired. Stopping processing.`);
+              break;
+            }
+            
             const filename = path.basename(image.imageUrl);
             const imagePath = path.join(uploadDir, filename);
             const imageBuffer = fs.readFileSync(imagePath);
@@ -765,16 +802,78 @@ export function registerAIRoutes(app: Express): void {
           }
         }
 
-        await db
-          .update(uploadSessionsTable)
-          .set({ status: "completed" })
-          .where(eq(uploadSessionsTable.id, session.id));
-        logger.info(`Session ${token} processing complete. ${uploads.length} images processed.`);
+        const finalSession = await db
+          .select({ status: uploadSessionsTable.status })
+          .from(uploadSessionsTable)
+          .where(eq(uploadSessionsTable.id, session.id))
+          .limit(1);
+        
+        if (finalSession[0]?.status && finalSession[0].status !== "cancelled" && finalSession[0].status !== "expired") {
+          await db
+            .update(uploadSessionsTable)
+            .set({ status: "completed" })
+            .where(eq(uploadSessionsTable.id, session.id));
+          logger.info(`Session ${token} processing complete. ${uploads.length} images processed.`);
+        } else {
+          logger.info(`Session ${token} processing stopped (${finalSession[0]?.status ?? "missing"}).`);
+        }
       })();
       
     } catch (error) {
       logger.error("Error processing session images:", error);
       res.status(500).json({ message: "Failed to process images" });
+    }
+  });
+  
+  /**
+   * Cancel processing for an upload session (keeps processed results)
+   */
+  app.post("/api/ai/upload-session/:token/cancel", authenticate, async (req: Request, res: Response) => {
+    try {
+      const { token } = req.params;
+      const sessionRows = await db
+        .select()
+        .from(uploadSessionsTable)
+        .where(eq(uploadSessionsTable.sessionToken, token))
+        .limit(1);
+
+      const session = sessionRows[0];
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+
+      if (session.userId !== req.userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (session.status === "cancelled") {
+        return res.json({ success: true, cancelledCount: 0, status: "cancelled" });
+      }
+
+      await db
+        .update(uploadSessionsTable)
+        .set({ status: "cancelled" })
+        .where(eq(uploadSessionsTable.id, session.id));
+
+      const cancelledRows = await db
+        .update(pendingUploadsTable)
+        .set({ status: "cancelled", errorMessage: "Cancelled by user" })
+        .where(
+          and(
+            eq(pendingUploadsTable.sessionId, session.id),
+            inArray(pendingUploadsTable.status, ["pending", "processing"])
+          )
+        )
+        .returning({ id: pendingUploadsTable.id });
+
+      res.json({
+        success: true,
+        cancelledCount: cancelledRows.length,
+        status: "cancelled",
+      });
+    } catch (error) {
+      logger.error("Error cancelling session processing:", error);
+      res.status(500).json({ message: "Failed to cancel processing" });
     }
   });
   
@@ -996,7 +1095,7 @@ export function registerAIRoutes(app: Express): void {
         .where(
           and(
             inArray(pendingUploadsTable.sessionId, sessionIds),
-            inArray(pendingUploadsTable.status, ["pending", "processing", "ready", "error"])
+            inArray(pendingUploadsTable.status, ["pending", "processing", "ready", "error", "cancelled"])
           )
         );
 
@@ -1470,7 +1569,11 @@ export function registerAIRoutes(app: Express): void {
         
         <script>
           const token = '${token}';
+          const MAX_FILES_PER_BATCH = ${MAX_UPLOAD_FILES};
+          const MAX_FILE_SIZE_BYTES = ${MAX_UPLOAD_FILE_SIZE_BYTES};
+          const MAX_FILE_SIZE_MB = Math.round(MAX_FILE_SIZE_BYTES / (1024 * 1024));
           let selectedFiles = [];
+          let isUploading = false;
           
           // DOM Elements
           const initialSection = document.getElementById('initial-section');
@@ -1555,59 +1658,146 @@ export function registerAIRoutes(app: Express): void {
             updatePreview();
           });
           
+          function setProgress(percent, message) {
+            const clamped = Math.max(0, Math.min(100, percent));
+            progressFill.style.width = clamped + '%';
+            progressText.textContent = message;
+          }
+          
+          function bytesForFiles(files) {
+            return files.reduce((sum, file) => sum + (file.size || 0), 0);
+          }
+          
+          function parseXhrMessage(xhr) {
+            if (xhr.response && xhr.response.message) {
+              return xhr.response.message;
+            }
+            if (xhr.responseText) {
+              try {
+                const parsed = JSON.parse(xhr.responseText);
+                if (parsed && parsed.message) {
+                  return parsed.message;
+                }
+              } catch {
+                // ignore parsing errors
+              }
+            }
+            return null;
+          }
+          
+          function uploadBatch(files, onProgress) {
+            return new Promise((resolve, reject) => {
+              const formData = new FormData();
+              files.forEach(file => {
+                formData.append('images', file);
+              });
+              
+              const xhr = new XMLHttpRequest();
+              xhr.open('POST', '/api/ai/mobile-upload/' + token);
+              xhr.responseType = 'json';
+              
+              xhr.upload.onprogress = (event) => {
+                if (onProgress) {
+                  onProgress(event);
+                }
+              };
+              
+              xhr.onload = () => {
+                const ok = xhr.status >= 200 && xhr.status < 300;
+                if (ok) {
+                  resolve(xhr.response || {});
+                  return;
+                }
+                const message = parseXhrMessage(xhr) || 'Upload failed (' + xhr.status + ')';
+                reject(new Error(message));
+              };
+              
+              xhr.onerror = () => {
+                reject(new Error('Network error. Please check your connection and try again.'));
+              };
+              
+              xhr.send(formData);
+            });
+          }
+          
           // Upload handler
           uploadBtn.addEventListener('click', async () => {
-            if (selectedFiles.length === 0) return;
+            if (selectedFiles.length === 0 || isUploading) return;
+            
+            const oversized = selectedFiles.filter(file => file.size > MAX_FILE_SIZE_BYTES);
+            if (oversized.length > 0) {
+              alert(oversized.length + ' photo' + (oversized.length !== 1 ? 's are' : ' is') + ' larger than ' + MAX_FILE_SIZE_MB + 'MB. Please remove them and try again.');
+              return;
+            }
+            
+            isUploading = true;
+            uploadBtn.disabled = true;
             
             // Show progress
             previewSection.classList.remove('visible');
+            completeSection.classList.remove('visible');
             progressSection.classList.add('visible');
-            progressText.textContent = 'Preparing ' + selectedFiles.length + ' photo' + (selectedFiles.length !== 1 ? 's' : '') + '...';
             
-            const formData = new FormData();
-            selectedFiles.forEach(file => {
-              formData.append('images', file);
-            });
+            const totalFiles = selectedFiles.length;
+            const totalBytes = bytesForFiles(selectedFiles);
+            const batches = [];
+            for (let index = 0; index < selectedFiles.length; index += MAX_FILES_PER_BATCH) {
+              batches.push(selectedFiles.slice(index, index + MAX_FILES_PER_BATCH));
+            }
+            const totalBatches = batches.length;
+            
+            let uploadedFiles = 0;
+            let uploadedBytes = 0;
+            let totalUploadedFromServer = 0;
+            
+            setProgress(0, 'Preparing ' + totalFiles + ' photo' + (totalFiles !== 1 ? 's' : '') + '...');
             
             try {
-              // Animate progress
-              let progress = 0;
-              const interval = setInterval(() => {
-                progress += Math.random() * 8;
-                if (progress > 85) {
-                  clearInterval(interval);
-                  progress = 85;
+              for (let index = 0; index < batches.length; index += 1) {
+                const batch = batches[index];
+                const batchBytes = bytesForFiles(batch);
+                const batchSuffix = totalBatches > 1 ? ' (batch ' + (index + 1) + ' of ' + totalBatches + ')' : '';
+                
+                const result = await uploadBatch(batch, (event) => {
+                  if (event.lengthComputable && totalBytes > 0) {
+                    const overall = (uploadedBytes + event.loaded) / totalBytes;
+                    const percent = Math.min(99, Math.round(overall * 100));
+                    const batchProgress = event.total > 0 ? event.loaded / event.total : 0;
+                    const currentCount = Math.min(totalFiles, uploadedFiles + Math.round(batchProgress * batch.length));
+                    setProgress(percent, 'Uploading ' + currentCount + '/' + totalFiles + ' photos' + batchSuffix + '...');
+                  } else {
+                    const basePercent = totalFiles > 0 ? Math.min(99, Math.round((uploadedFiles / totalFiles) * 100)) : 0;
+                    setProgress(basePercent, 'Uploading batch ' + (index + 1) + ' of ' + totalBatches + '...');
+                  }
+                });
+                
+                uploadedFiles += batch.length;
+                uploadedBytes += batchBytes;
+                if (result && typeof result.uploaded === 'number') {
+                  totalUploadedFromServer += result.uploaded;
+                } else {
+                  totalUploadedFromServer += batch.length;
                 }
-                progressFill.style.width = progress + '%';
-                progressText.textContent = 'Uploading... ' + Math.round(progress) + '%';
-              }, 150);
-              
-              const response = await fetch('/api/ai/mobile-upload/' + token, {
-                method: 'POST',
-                body: formData
-              });
-              
-              clearInterval(interval);
-              progressFill.style.width = '100%';
-              progressText.textContent = 'Complete!';
-              
-              if (response.ok) {
-                const result = await response.json();
-                setTimeout(() => {
-                  progressSection.classList.remove('visible');
-                  completeSection.classList.add('visible');
-                  completeMessage.textContent = result.uploaded + ' photo' + (result.uploaded !== 1 ? 's' : '') + ' uploaded! Return to Filadex on your computer to process and import them.';
-                }, 600);
-              } else {
-                const error = await response.json();
-                alert('Upload failed: ' + (error.message || 'Unknown error'));
-                progressSection.classList.remove('visible');
-                previewSection.classList.add('visible');
+                
+                const percentComplete = totalBytes > 0 ? Math.round((uploadedBytes / totalBytes) * 100) : Math.round((uploadedFiles / totalFiles) * 100);
+                setProgress(Math.min(99, percentComplete), 'Uploaded ' + uploadedFiles + '/' + totalFiles + ' photos...');
               }
+              
+              setProgress(100, 'Complete!');
+              const uploadedCount = totalUploadedFromServer || uploadedFiles;
+              setTimeout(() => {
+                progressSection.classList.remove('visible');
+                completeSection.classList.add('visible');
+                completeMessage.textContent = uploadedCount + ' photo' + (uploadedCount !== 1 ? 's' : '') + ' uploaded! Return to Filadex on your computer to process and import them.';
+              }, 400);
             } catch (error) {
-              alert('Upload failed: ' + error.message);
+              const message = error && error.message ? error.message : 'Upload failed';
+              alert('Upload failed: ' + message);
               progressSection.classList.remove('visible');
               previewSection.classList.add('visible');
+            } finally {
+              isUploading = false;
+              uploadBtn.disabled = false;
             }
           });
         </script>
