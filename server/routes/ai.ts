@@ -75,6 +75,10 @@ const uploadDir = path.join(process.cwd(), "public", "uploads", "filaments");
 const MAX_UPLOAD_FILES = 50;
 const MAX_UPLOAD_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB max
 const ACTIVE_PENDING_STATUSES = ["pending", "processing", "ready", "error"] as const;
+const AI_PROCESSING_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.AI_PROCESSING_CONCURRENCY ?? "6", 10) || 6
+);
 
 // Ensure upload directory exists
 if (!fs.existsSync(uploadDir)) {
@@ -757,50 +761,73 @@ export function registerAIRoutes(app: Express): void {
         totalCount: uploads.length,
       });
       
-      // Process images one at a time in the background
+      // Process images in parallel (limited concurrency) in the background
       (async () => {
-        for (const image of unprocessedImages) {
-          try {
-            const sessionCheck = await db
-              .select({ status: uploadSessionsTable.status })
-              .from(uploadSessionsTable)
-              .where(eq(uploadSessionsTable.id, session.id))
-              .limit(1);
-            
-            const currentStatus = sessionCheck[0]?.status;
-            if (!currentStatus || currentStatus === "cancelled" || currentStatus === "expired") {
-              logger.info(`Session ${token} cancelled or expired. Stopping processing.`);
-              break;
+        const totalToProcess = unprocessedImages.length;
+        const concurrency = Math.min(AI_PROCESSING_CONCURRENCY, totalToProcess);
+        let nextIndex = 0;
+        let stopProcessing = false;
+
+        const processNext = async () => {
+          while (true) {
+            if (stopProcessing) return;
+            const currentIndex = nextIndex;
+            nextIndex += 1;
+            const image = unprocessedImages[currentIndex];
+            if (!image) return;
+
+            try {
+              const sessionCheck = await db
+                .select({ status: uploadSessionsTable.status })
+                .from(uploadSessionsTable)
+                .where(eq(uploadSessionsTable.id, session.id))
+                .limit(1);
+              
+              const currentStatus = sessionCheck[0]?.status;
+              if (!currentStatus || currentStatus === "cancelled" || currentStatus === "expired") {
+                stopProcessing = true;
+                logger.info(`Session ${token} cancelled or expired. Stopping processing.`);
+                return;
+              }
+
+              await db
+                .update(pendingUploadsTable)
+                .set({ status: "processing" })
+                .where(eq(pendingUploadsTable.id, image.id));
+
+              const filename = path.basename(image.imageUrl);
+              const imagePath = path.join(uploadDir, filename);
+              const imageBuffer = fs.readFileSync(imagePath);
+              const base64Image = imageBuffer.toString("base64");
+
+              const extractedData = await extractFilamentDataFromImage(base64Image, apiKey);
+              await db
+                .update(pendingUploadsTable)
+                .set({
+                  extractedData: JSON.stringify(extractedData),
+                  status: "ready",
+                  errorMessage: null,
+                })
+                .where(eq(pendingUploadsTable.id, image.id));
+
+              logger.info(`Processed image: ${filename}`);
+            } catch (error) {
+              await db
+                .update(pendingUploadsTable)
+                .set({
+                  status: "error",
+                  errorMessage: error instanceof Error ? error.message : "Failed to process image",
+                })
+                .where(eq(pendingUploadsTable.id, image.id));
+
+              logger.error(`Error processing image ${image.imageUrl}:`, error);
             }
-            
-            const filename = path.basename(image.imageUrl);
-            const imagePath = path.join(uploadDir, filename);
-            const imageBuffer = fs.readFileSync(imagePath);
-            const base64Image = imageBuffer.toString("base64");
-
-            const extractedData = await extractFilamentDataFromImage(base64Image, apiKey);
-            await db
-              .update(pendingUploadsTable)
-              .set({
-                extractedData: JSON.stringify(extractedData),
-                status: "ready",
-                errorMessage: null,
-              })
-              .where(eq(pendingUploadsTable.id, image.id));
-
-            logger.info(`Processed image: ${filename}`);
-          } catch (error) {
-            await db
-              .update(pendingUploadsTable)
-              .set({
-                status: "error",
-                errorMessage: error instanceof Error ? error.message : "Failed to process image",
-              })
-              .where(eq(pendingUploadsTable.id, image.id));
-
-            logger.error(`Error processing image ${image.imageUrl}:`, error);
           }
-        }
+        };
+
+        await Promise.all(
+          Array.from({ length: concurrency }, () => processNext())
+        );
 
         const finalSession = await db
           .select({ status: uploadSessionsTable.status })

@@ -250,11 +250,142 @@ Many labels (especially Sunlu High Speed PLA) show multiple print settings for d
 
 Return ONLY the JSON object, no additional text.`;
 
+const AI_RETRY_MAX_ATTEMPTS = Math.max(
+  1,
+  Number.parseInt(process.env.AI_RETRY_MAX_ATTEMPTS ?? "4", 10) || 4
+);
+const AI_RETRY_BASE_DELAY_MS = Math.max(
+  100,
+  Number.parseInt(process.env.AI_RETRY_BASE_DELAY_MS ?? "500", 10) || 500
+);
+const AI_RETRY_MAX_DELAY_MS = Math.max(
+  AI_RETRY_BASE_DELAY_MS,
+  Number.parseInt(process.env.AI_RETRY_MAX_DELAY_MS ?? "8000", 10) || 8000
+);
+const RETRYABLE_STATUS_CODES = new Set([408, 409, 429, 500, 502, 503, 504]);
+
 /**
  * Create an OpenAI client with the provided API key
  */
 function createOpenAIClient(apiKey: string): OpenAI {
   return new OpenAI({ apiKey });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function parseDurationMs(value: string): number | null {
+  const trimmed = value.trim().toLowerCase();
+  const match = trimmed.match(/^([0-9.]+)\s*(ms|s|m|h)?$/);
+  if (!match) return null;
+  const amount = Number.parseFloat(match[1]);
+  if (!Number.isFinite(amount)) return null;
+  const unit = match[2] || 's';
+  const multipliers: Record<string, number> = {
+    ms: 1,
+    s: 1000,
+    m: 60_000,
+    h: 3_600_000,
+  };
+  return Math.round(amount * (multipliers[unit] ?? 1000));
+}
+
+function getRetryAfterMs(error: unknown): number | null {
+  if (error instanceof OpenAI.APIError && error.headers) {
+    const retryAfter = error.headers.get('retry-after');
+    if (retryAfter) {
+      const seconds = Number.parseFloat(retryAfter);
+      if (Number.isFinite(seconds)) {
+        return Math.max(0, Math.round(seconds * 1000));
+      }
+      const parsedDate = new Date(retryAfter);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        return Math.max(0, parsedDate.getTime() - Date.now());
+      }
+    }
+
+    const resetRequests = error.headers.get('x-ratelimit-reset-requests');
+    if (resetRequests) {
+      const parsed = parseDurationMs(resetRequests);
+      if (parsed !== null) return Math.max(0, parsed);
+    }
+  }
+
+  return null;
+}
+
+function isRetryableOpenAIError(error: unknown): boolean {
+  if (
+    error instanceof OpenAI.RateLimitError ||
+    error instanceof OpenAI.APIConnectionError ||
+    error instanceof OpenAI.APIConnectionTimeoutError ||
+    error instanceof OpenAI.InternalServerError
+  ) {
+    return true;
+  }
+
+  if (error instanceof OpenAI.APIError) {
+    if (error.status && RETRYABLE_STATUS_CODES.has(error.status)) {
+      return true;
+    }
+  }
+
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /(rate limit|timeout|timed out|temporarily unavailable|socket hang up|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)/i.test(message);
+}
+
+function getFriendlyOpenAIErrorMessage(error: unknown): string {
+  if (error instanceof OpenAI.RateLimitError || (error instanceof OpenAI.APIError && error.status === 429)) {
+    return 'OpenAI rate limit reached. Please wait a bit and retry.';
+  }
+  if (error instanceof OpenAI.APIConnectionTimeoutError) {
+    return 'OpenAI request timed out. Please retry.';
+  }
+  if (error instanceof OpenAI.APIConnectionError) {
+    return 'Network error contacting OpenAI. Please retry.';
+  }
+  if (error instanceof OpenAI.InternalServerError) {
+    return 'OpenAI service error. Please retry shortly.';
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'OpenAI request failed.';
+}
+
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  description: string
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= AI_RETRY_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const retryable = isRetryableOpenAIError(error);
+      if (!retryable || attempt >= AI_RETRY_MAX_ATTEMPTS) {
+        break;
+      }
+
+      const retryAfterMs = getRetryAfterMs(error);
+      const baseDelay = Math.min(
+        AI_RETRY_MAX_DELAY_MS,
+        AI_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)
+      );
+      const jitter = Math.round(baseDelay * (1 + Math.random() * 0.3));
+      const delayMs = retryAfterMs !== null ? retryAfterMs : jitter;
+
+      const message = error instanceof Error ? error.message : String(error || 'Unknown error');
+      logger.warn(
+        `${description} failed (attempt ${attempt}/${AI_RETRY_MAX_ATTEMPTS}). Retrying in ${delayMs}ms. Reason: ${message}`
+      );
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError ?? new Error('OpenAI request failed.');
 }
 
 // Available models with vision capabilities
@@ -290,52 +421,57 @@ export async function extractFilamentDataFromImage(
   
   try {
     logger.info(`Sending image to OpenAI Vision API using model: ${model}...`);
-    
-    const response = await openai.chat.completions.create({
-      model: model,
-      messages: [
-        {
-          role: 'user',
-          content: [
+
+    const response = await withRetry(
+      () =>
+        openai.chat.completions.create({
+          model: model,
+          messages: [
             {
-              type: 'text',
-              text: EXTRACTION_PROMPT
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: imageUrl,
-                detail: 'high' // Use high detail for better text recognition
-              }
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: EXTRACTION_PROMPT
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: imageUrl,
+                    detail: 'high' // Use high detail for better text recognition
+                  }
+                }
+              ]
             }
-          ]
-        }
-      ],
-      max_tokens: 1000,
-      temperature: 0.2 // Lower temperature for more consistent extraction
-    });
-    
+          ],
+          max_tokens: 1000,
+          temperature: 0.2 // Lower temperature for more consistent extraction
+        }),
+      'OpenAI Vision request'
+    );
+
     const content = response.choices[0]?.message?.content;
     if (!content) {
       throw new Error('No response from OpenAI Vision API');
     }
-    
+
     logger.info('Received response from OpenAI Vision API');
-    
+
     // Parse the JSON response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Could not parse JSON from response');
     }
-    
+
     const data = JSON.parse(jsonMatch[0]) as ExtractedFilamentData;
-    
+
     // Validate and clean up the data
     return cleanExtractedData(data);
-    
+
   } catch (error) {
     logger.error('Error extracting filament data from image:', error);
-    throw error;
+    const friendlyMessage = getFriendlyOpenAIErrorMessage(error);
+    throw new Error(friendlyMessage, { cause: error });
   }
 }
 

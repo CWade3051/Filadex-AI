@@ -174,6 +174,14 @@ docker compose up -d
 | `INIT_SAMPLE_DATA` | Seed initial data | true |
 | `DEFAULT_LANGUAGE` | Default language (en/de) | en |
 | `LOG_LEVEL` | Logging level | INFO |
+| `AI_PROCESSING_CONCURRENCY` | Parallel AI requests for mobile session processing | 6 |
+| `AI_RETRY_MAX_ATTEMPTS` | Max retry attempts for OpenAI requests | 4 |
+| `AI_RETRY_BASE_DELAY_MS` | Base backoff delay for retries (ms) | 500 |
+| `AI_RETRY_MAX_DELAY_MS` | Max backoff delay for retries (ms) | 8000 |
+
+**AI processing tuning:** `AI_PROCESSING_CONCURRENCY` controls how many OpenAI Vision requests run in parallel during **mobile upload session processing** (the Review Results queue). Higher values speed up processing but can trigger rate limits or timeouts depending on your OpenAI account. If you see 429 errors, lower this value.
+
+**Retry/backoff behavior:** OpenAI requests automatically retry with exponential backoff on rate limits and transient errors. You can tune the retry behavior with `AI_RETRY_MAX_ATTEMPTS`, `AI_RETRY_BASE_DELAY_MS`, and `AI_RETRY_MAX_DELAY_MS`. If retries are exhausted, the photo is marked with an error and you can retry processing later.
 
 ### Storage Locations
 
